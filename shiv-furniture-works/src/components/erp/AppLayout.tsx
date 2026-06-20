@@ -183,7 +183,20 @@ export function AppLayout() {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background text-foreground">
         <div className="text-center">
-          <div className="mx-auto mb-3 grid h-10 w-10 place-items-center rounded-md bg-accent text-accent-foreground font-serif text-lg font-semibold animate-pulse">S</div>
+          <svg
+            width="40"
+            height="40"
+            viewBox="0 0 32 32"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            className="mx-auto mb-3 h-10 w-10 animate-pulse shrink-0"
+          >
+            <rect width="32" height="32" rx="8" fill="#C2623F" />
+            <path
+              d="M8 7H11L13.5 17H25V20H24.2L22.7 26H20.2L21.7 20H13.3L10.3 26H7.8L10.8 20L8 7Z"
+              fill="#FFFFFF"
+            />
+          </svg>
           <p className="text-sm text-muted-foreground">Loading...</p>
         </div>
       </div>
@@ -202,9 +215,20 @@ export function AppLayout() {
         )}
       >
         <div className="flex h-14 items-center gap-2 border-b border-sidebar-border px-4">
-          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-accent text-accent-foreground font-serif text-base font-semibold">
-            S
-          </div>
+          <svg
+            width="32"
+            height="32"
+            viewBox="0 0 32 32"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-8 w-8 shrink-0"
+          >
+            <rect width="32" height="32" rx="8" fill="#C2623F" />
+            <path
+              d="M8 7H11L13.5 17H25V20H24.2L22.7 26H20.2L21.7 20H13.3L10.3 26H7.8L10.8 20L8 7Z"
+              fill="#FFFFFF"
+            />
+          </svg>
           {!sidebarCollapsed && (
             <div className="min-w-0">
               <div className="truncate font-serif text-sm font-semibold leading-tight">Shiv Furniture</div>

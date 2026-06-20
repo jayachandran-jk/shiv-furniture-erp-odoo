@@ -73,4 +73,17 @@ public class Product {
 
     @Transient
     private java.util.List<BomComponent> components;
+
+    @Transient
+    private java.util.List<ProductReservation> reservations;
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class ProductReservation {
+        private String salesOrderId;
+        private String salesOrderNumber;
+        private Integer reservedQty;
+    }
 }

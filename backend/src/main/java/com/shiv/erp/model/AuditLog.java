@@ -18,6 +18,13 @@ public class AuditLog {
     @Column(name = "ts")
     private LocalDateTime ts;
 
+    @PrePersist
+    protected void onCreate() {
+        if (this.ts == null) {
+            this.ts = LocalDateTime.now();
+        }
+    }
+
     @Column(name = "user_id", length = 36)
     private String userId;
 

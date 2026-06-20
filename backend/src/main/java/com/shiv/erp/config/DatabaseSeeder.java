@@ -100,8 +100,8 @@ public class DatabaseSeeder implements CommandLineRunner {
         Product pW5 = Product.builder().id("p-w5").sku("RAW-LEG-OAK").name("Oak Leg Blank").category("Raw Material").costPrice(new BigDecimal("320.00")).salePrice(BigDecimal.ZERO).strategy("MTS").procurementType("Purchase").preferredVendorId("v-1").reorderThreshold(40).onHandQty(96).reservedQty(0).build();
 
         Product pF1 = Product.builder().id("p-f1").sku("FG-DINTBL-6").name("Heritage Dining Table (6-seat)").category("Dining").costPrice(BigDecimal.ZERO).salePrice(new BigDecimal("38500.00")).strategy("MTO").procurementType("Manufacturing").reorderThreshold(0).onHandQty(2).reservedQty(0).bomId("bom-1").build();
-        Product pF2 = Product.builder().id("p-f2").sku("FG-OFFCHR").name("Walnut Office Chair").category("Office").costPrice(BigDecimal.ZERO).salePrice(new BigDecimal("9200.00")).strategy("MTS").procurementType("Manufacturing").reorderThreshold(5).onHandQty(14).reservedQty(9).bomId("bom-2").build();
-        Product pF3 = Product.builder().id("p-f3").sku("FG-BKSHLF-5").name("5-Tier Bookshelf").category("Living Room").costPrice(BigDecimal.ZERO).salePrice(new BigDecimal("14800.00")).strategy("MTO").procurementType("Manufacturing").reorderThreshold(0).onHandQty(4).reservedQty(0).bomId("bom-3").build();
+        Product pF2 = Product.builder().id("p-f2").sku("FG-OFFCHR").name("Walnut Office Chair").category("Office").costPrice(BigDecimal.ZERO).salePrice(new BigDecimal("9200.00")).strategy("MTS").procurementType("Manufacturing").reorderThreshold(5).onHandQty(14).reservedQty(11).bomId("bom-2").build();
+        Product pF3 = Product.builder().id("p-f3").sku("FG-BKSHLF-5").name("5-Tier Bookshelf").category("Living Room").costPrice(BigDecimal.ZERO).salePrice(new BigDecimal("14800.00")).strategy("MTO").procurementType("Manufacturing").reorderThreshold(0).onHandQty(4).reservedQty(2).bomId("bom-3").build();
         Product pF4 = Product.builder().id("p-f4").sku("FG-STUDENTDESK").name("Student Study Desk").category("Office").costPrice(BigDecimal.ZERO).salePrice(new BigDecimal("6400.00")).strategy("MTS").procurementType("Manufacturing").reorderThreshold(10).onHandQty(22).reservedQty(4).bomId("bom-4").build();
 
         productRepository.saveAll(List.of(pW1, pW2, pW3, pW4, pW5, pF1, pF2, pF3, pF4));
@@ -159,37 +159,67 @@ public class DatabaseSeeder implements CommandLineRunner {
         bomRepository.saveAll(List.of(bom1, bom2, bom3, bom4));
 
         // 7. Sales Orders
-        SalesOrder so1 = SalesOrder.builder().id("so-1").number("SO-2026-0142").customerId("c-1").status("Confirmed").createdBy("u-2").build();
+        SalesOrder so1 = SalesOrder.builder().id("so-1").number("SO-2026-0142").customerId("c-1").status("Confirmed").createdBy("u-2").date(LocalDateTime.now().minusDays(2)).build();
         so1.setLines(List.of(
                 SalesOrderLine.builder().id("sol-1").salesOrderId("so-1").productId("p-f2").qty(8).unitPrice(new BigDecimal("9200.00")).reservedQty(8).deliveredQty(0).build(),
                 SalesOrderLine.builder().id("sol-2").salesOrderId("so-1").productId("p-f4").qty(4).unitPrice(new BigDecimal("6400.00")).reservedQty(4).deliveredQty(0).build()
         ));
 
-        SalesOrder so2 = SalesOrder.builder().id("so-2").number("SO-2026-0143").customerId("c-2").status("Partially Delivered").createdBy("u-4").build();
+        SalesOrder so2 = SalesOrder.builder().id("so-2").number("SO-2026-0143").customerId("c-2").status("Partially Delivered").createdBy("u-4").date(LocalDateTime.now().minusDays(1)).build();
         so2.setLines(List.of(
                 SalesOrderLine.builder().id("sol-3").salesOrderId("so-2").productId("p-f2").qty(2).unitPrice(new BigDecimal("9200.00")).reservedQty(1).deliveredQty(1).build()
         ));
 
-        SalesOrder so3 = SalesOrder.builder().id("so-3").number("SO-2026-0144").customerId("c-3").status("Draft").createdBy("u-2").build();
+        SalesOrder so3 = SalesOrder.builder().id("so-3").number("SO-2026-0144").customerId("c-3").status("Draft").createdBy("u-2").date(LocalDateTime.now().minusHours(4)).build();
         so3.setLines(List.of(
                 SalesOrderLine.builder().id("sol-4").salesOrderId("so-3").productId("p-f3").qty(3).unitPrice(new BigDecimal("14800.00")).reservedQty(0).deliveredQty(0).build()
         ));
 
-        SalesOrder so4 = SalesOrder.builder().id("so-4").number("SO-2026-0141").customerId("c-4").status("Fully Delivered").createdBy("u-2").build();
+        SalesOrder so4 = SalesOrder.builder().id("so-4").number("SO-2026-0141").customerId("c-4").status("Fully Delivered").createdBy("u-2").date(LocalDateTime.now().minusDays(5)).build();
         so4.setLines(List.of(
                 SalesOrderLine.builder().id("sol-5").salesOrderId("so-4").productId("p-f4").qty(12).unitPrice(new BigDecimal("6400.00")).reservedQty(0).deliveredQty(12).build()
         ));
 
-        salesOrderRepository.saveAll(List.of(so1, so2, so3, so4));
+        SalesOrder so5 = SalesOrder.builder().id("so-5").number("SO-2026-0140").customerId("c-1").status("Fully Delivered").createdBy("u-2").date(LocalDateTime.now().minusDays(6)).build();
+        so5.setLines(List.of(
+                SalesOrderLine.builder().id("sol-6").salesOrderId("so-5").productId("p-f2").qty(5).unitPrice(new BigDecimal("9200.00")).reservedQty(0).deliveredQty(5).build()
+        ));
+
+        SalesOrder so6 = SalesOrder.builder().id("so-6").number("SO-2026-0145").customerId("c-2").status("Fully Delivered").createdBy("u-2").date(LocalDateTime.now().minusDays(4)).build();
+        so6.setLines(List.of(
+                SalesOrderLine.builder().id("sol-7").salesOrderId("so-6").productId("p-f4").qty(6).unitPrice(new BigDecimal("6400.00")).reservedQty(0).deliveredQty(6).build()
+        ));
+
+        SalesOrder so7 = SalesOrder.builder().id("so-7").number("SO-2026-0146").customerId("c-3").status("Confirmed").createdBy("u-2").date(LocalDateTime.now().minusDays(3)).build();
+        so7.setLines(List.of(
+                SalesOrderLine.builder().id("sol-8").salesOrderId("so-7").productId("p-f3").qty(2).unitPrice(new BigDecimal("14800.00")).reservedQty(2).deliveredQty(0).build()
+        ));
+
+        SalesOrder so8 = SalesOrder.builder().id("so-8").number("SO-2026-0147").customerId("c-4").status("Fully Delivered").createdBy("u-2").date(LocalDateTime.now().minusDays(2)).build();
+        so8.setLines(List.of(
+                SalesOrderLine.builder().id("sol-9").salesOrderId("so-8").productId("p-f2").qty(4).unitPrice(new BigDecimal("9200.00")).reservedQty(0).deliveredQty(4).build()
+        ));
+
+        SalesOrder so9 = SalesOrder.builder().id("so-9").number("SO-2026-0148").customerId("c-1").status("Fully Delivered").createdBy("u-2").date(LocalDateTime.now().minusDays(1)).build();
+        so9.setLines(List.of(
+                SalesOrderLine.builder().id("sol-10").salesOrderId("so-9").productId("p-f4").qty(3).unitPrice(new BigDecimal("6400.00")).reservedQty(0).deliveredQty(3).build()
+        ));
+
+        SalesOrder so10 = SalesOrder.builder().id("so-10").number("SO-2026-0149").customerId("c-2").status("Confirmed").createdBy("u-2").date(LocalDateTime.now().minusHours(12)).build();
+        so10.setLines(List.of(
+                SalesOrderLine.builder().id("sol-11").salesOrderId("so-10").productId("p-f2").qty(2).unitPrice(new BigDecimal("9200.00")).reservedQty(2).deliveredQty(0).build()
+        ));
+
+        salesOrderRepository.saveAll(List.of(so1, so2, so3, so4, so5, so6, so7, so8, so9, so10));
 
         // 8. Purchase Orders
-        PurchaseOrder po1 = PurchaseOrder.builder().id("po-1").number("PO-2026-0088").vendorId("v-1").status("Partially Received").createdBy("u-2").isAutoGenerated(false).build();
+        PurchaseOrder po1 = PurchaseOrder.builder().id("po-1").number("PO-2026-0088").vendorId("v-1").status("Partially Received").createdBy("u-2").isAutoGenerated(false).date(LocalDateTime.now().minusDays(3)).build();
         po1.setLines(List.of(
                 PurchaseOrderLine.builder().id("pol-1").purchaseOrderId("po-1").productId("p-w1").qty(30).unitPrice(new BigDecimal("1200.00")).receivedQty(18).build(),
                 PurchaseOrderLine.builder().id("pol-2").purchaseOrderId("po-1").productId("p-w5").qty(50).unitPrice(new BigDecimal("320.00")).receivedQty(50).build()
         ));
 
-        PurchaseOrder po2 = PurchaseOrder.builder().id("po-2").number("PO-2026-0089").vendorId("v-3").status("Confirmed").createdBy("u-2").isAutoGenerated(true).triggeringSalesOrderId("so-1").build();
+        PurchaseOrder po2 = PurchaseOrder.builder().id("po-2").number("PO-2026-0089").vendorId("v-3").status("Confirmed").createdBy("u-2").isAutoGenerated(true).triggeringSalesOrderId("so-1").date(LocalDateTime.now().minusDays(1)).build();
         po2.setLines(List.of(
                 PurchaseOrderLine.builder().id("pol-3").purchaseOrderId("po-2").productId("p-w4").qty(12).unitPrice(new BigDecimal("620.00")).receivedQty(0).build()
         ));
@@ -197,7 +227,7 @@ public class DatabaseSeeder implements CommandLineRunner {
         purchaseOrderRepository.saveAll(List.of(po1, po2));
 
         // 9. Manufacturing Orders
-        ManufacturingOrder mo1 = ManufacturingOrder.builder().id("mo-1").number("MO-2026-0034").productId("p-f1").qty(2).status("In Progress").assigneeId("u-4").isAutoGenerated(false).build();
+        ManufacturingOrder mo1 = ManufacturingOrder.builder().id("mo-1").number("MO-2026-0034").productId("p-f1").qty(2).status("In Progress").assigneeId("u-4").isAutoGenerated(false).date(LocalDateTime.now().minusDays(2)).build();
         mo1.setComponents(List.of(
                 MoComponent.builder().moId("mo-1").productId("p-w1").requiredQty(6).toConsumeQty(6).consumedQty(0).build(),
                 MoComponent.builder().moId("mo-1").productId("p-w5").requiredQty(8).toConsumeQty(8).consumedQty(0).build(),
@@ -211,7 +241,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                 WorkOrder.builder().id("wo-4").moId("mo-1").name("Apply walnut finish").workCenterId("wc-4").status("Pending").expectedDurationMinutes(150).actualDurationMinutes(0).build()
         ));
 
-        ManufacturingOrder mo2 = ManufacturingOrder.builder().id("mo-2").number("MO-2026-0035").productId("p-f3").qty(3).status("Draft").assigneeId("u-4").isAutoGenerated(true).triggeringSalesOrderId("so-3").build();
+        ManufacturingOrder mo2 = ManufacturingOrder.builder().id("mo-2").number("MO-2026-0035").productId("p-f3").qty(3).status("Draft").assigneeId("u-4").isAutoGenerated(true).triggeringSalesOrderId("so-3").date(LocalDateTime.now().minusHours(1)).build();
         mo2.setComponents(List.of(
                 MoComponent.builder().moId("mo-2").productId("p-w2").requiredQty(6).toConsumeQty(6).consumedQty(0).build(),
                 MoComponent.builder().moId("mo-2").productId("p-w3").requiredQty(3).toConsumeQty(3).consumedQty(0).build(),
@@ -226,19 +256,19 @@ public class DatabaseSeeder implements CommandLineRunner {
         manufacturingOrderRepository.saveAll(List.of(mo1, mo2));
 
         // 10. Stock Ledger entries
-        StockLedger l1 = StockLedger.builder().id("l-1").productId("p-f4").movementType("SALES_DELIVERY").quantity(12).onHandAfter(22).reservedAfter(0).referenceType("SO").referenceId("so-4").notes("Delivered 12 units").build();
-        StockLedger l2 = StockLedger.builder().id("l-2").productId("p-w5").movementType("PURCHASE_RECEIPT").quantity(50).onHandAfter(96).reservedAfter(0).referenceType("PO").referenceId("po-1").notes("Received 50 units").build();
-        StockLedger l3 = StockLedger.builder().id("l-3").productId("p-w1").movementType("PURCHASE_RECEIPT").quantity(18).onHandAfter(84).reservedAfter(0).referenceType("PO").referenceId("po-1").notes("Received 18 units").build();
-        StockLedger l4 = StockLedger.builder().id("l-4").productId("p-f2").movementType("SALES_RESERVE").quantity(8).onHandAfter(14).reservedAfter(8).referenceType("SO").referenceId("so-1").notes("Reserved 8 units").build();
-        StockLedger l5 = StockLedger.builder().id("l-5").productId("p-f2").movementType("SALES_DELIVERY").quantity(1).onHandAfter(14).reservedAfter(9).referenceType("SO").referenceId("so-2").notes("Delivered 1 unit").build();
+        StockLedger l1 = StockLedger.builder().id("l-1").productId("p-f4").movementType("SALES_DELIVERY").quantity(12).onHandAfter(22).reservedAfter(0).referenceType("SO").referenceId("so-4").notes("Delivered 12 units").ts(LocalDateTime.now().minusDays(8)).build();
+        StockLedger l2 = StockLedger.builder().id("l-2").productId("p-w5").movementType("PURCHASE_RECEIPT").quantity(50).onHandAfter(96).reservedAfter(0).referenceType("PO").referenceId("po-1").notes("Received 50 units").ts(LocalDateTime.now().minusDays(3)).build();
+        StockLedger l3 = StockLedger.builder().id("l-3").productId("p-w1").movementType("PURCHASE_RECEIPT").quantity(18).onHandAfter(84).reservedAfter(0).referenceType("PO").referenceId("po-1").notes("Received 18 units").ts(LocalDateTime.now().minusDays(2)).build();
+        StockLedger l4 = StockLedger.builder().id("l-4").productId("p-f2").movementType("SALES_RESERVE").quantity(8).onHandAfter(14).reservedAfter(8).referenceType("SO").referenceId("so-1").notes("Reserved 8 units").ts(LocalDateTime.now().minusDays(2)).build();
+        StockLedger l5 = StockLedger.builder().id("l-5").productId("p-f2").movementType("SALES_DELIVERY").quantity(1).onHandAfter(14).reservedAfter(9).referenceType("SO").referenceId("so-2").notes("Delivered 1 unit").ts(LocalDateTime.now().minusDays(1)).build();
 
         stockLedgerRepository.saveAll(List.of(l1, l2, l3, l4, l5));
 
         // 11. Audit logs
-        AuditLog a1 = AuditLog.builder().id("a-1").userId("u-2").entityType("SalesOrder").entityId("so-1").action("Confirmed").oldValue("\"Draft\"").newValue("\"Confirmed\"").build();
-        AuditLog a2 = AuditLog.builder().id("a-2").userId("u-2").entityType("PurchaseOrder").entityId("po-2").action("Auto-created").oldValue(null).newValue("\"Draft (from SO-2026-0142)\"").build();
-        AuditLog a3 = AuditLog.builder().id("a-3").userId("u-4").entityType("SalesOrder").entityId("so-2").action("Partially Delivered").oldValue("\"0\"").newValue("\"1\"").build();
-        AuditLog a4 = AuditLog.builder().id("a-4").userId("u-2").entityType("SalesOrder").entityId("so-3").action("Created").oldValue(null).newValue("\"Created draft SO\"").build();
+        AuditLog a1 = AuditLog.builder().id("a-1").userId("u-2").entityType("SalesOrder").entityId("so-1").action("Confirmed").oldValue("\"Draft\"").newValue("\"Confirmed\"").ts(LocalDateTime.now().minusDays(2)).build();
+        AuditLog a2 = AuditLog.builder().id("a-2").userId("u-2").entityType("PurchaseOrder").entityId("po-2").action("Auto-created").oldValue(null).newValue("\"Draft (from SO-2026-0142)\"").ts(LocalDateTime.now().minusDays(2)).build();
+        AuditLog a3 = AuditLog.builder().id("a-3").userId("u-4").entityType("SalesOrder").entityId("so-2").action("Partially Delivered").oldValue("\"0\"").newValue("\"1\"").ts(LocalDateTime.now().minusDays(1)).build();
+        AuditLog a4 = AuditLog.builder().id("a-4").userId("u-2").entityType("SalesOrder").entityId("so-3").action("Created").oldValue(null).newValue("\"Created draft SO\"").ts(LocalDateTime.now().minusHours(2)).build();
 
         auditLogRepository.saveAll(List.of(a1, a2, a3, a4));
     }

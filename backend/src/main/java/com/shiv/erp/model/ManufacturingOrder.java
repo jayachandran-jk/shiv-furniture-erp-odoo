@@ -31,8 +31,15 @@ public class ManufacturingOrder {
     @Column(name = "assignee_id", length = 36)
     private String assigneeId;
 
-    @Column(insertable = false, updatable = false)
+    @Column(name = "date")
     private LocalDateTime date;
+
+    @PrePersist
+    protected void onCreate() {
+        if (this.date == null) {
+            this.date = LocalDateTime.now();
+        }
+    }
 
     @Column(name = "is_auto_generated")
     @Builder.Default

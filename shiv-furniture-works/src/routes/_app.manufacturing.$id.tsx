@@ -1,19 +1,19 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useERP, useCurrentUser } from "@/lib/erp/store";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { hasPermission } from "@/lib/erp/permissions";
 import { StatusBadge } from "@/components/erp/StatusBadge";
 import { Button, StatusStepper, Field, Input, Select } from "@/components/erp/ui";
 import { format } from "date-fns";
 import { ArrowLeft, Play, Pause, Check, Pencil, X, Save, Package, ShoppingCart } from "lucide-react";
 import type { WorkOrder } from "@/lib/erp/types";
+import { useWorkOrderContext } from "@/lib/erp/WorkOrderContext";
 
 export const Route = createFileRoute("/_app/manufacturing/$id")({
   component: MoDetail,
 });
 
-// Include "Waiting for Materials" so the stepper highlights it correctly
-const STEPS = ["Draft", "Confirmed", "Waiting for Materials", "In Progress", "Done"];
+// STEPS defined dynamically inside component
 
 function fmtMs(ms: number) {
   const s = Math.floor(ms / 1000);
@@ -21,6 +21,23 @@ function fmtMs(ms: number) {
   const m = Math.floor((s % 3600) / 60);
   const sec = s % 60;
   return `${h ? `${h}h ` : ""}${String(m).padStart(2, "0")}m ${String(sec).padStart(2, "0")}s`;
+}
+
+function formatSeconds(totalSecs: number) {
+  if (totalSecs <= 0) return "00m 00s";
+  const h = Math.floor(totalSecs / 3600);
+  const m = Math.floor((totalSecs % 3600) / 60);
+  const s = totalSecs % 60;
+  
+  const parts = [];
+  if (h > 0) {
+    parts.push(`${h}h`);
+    parts.push(`${String(m).padStart(2, "0")}m`);
+  } else {
+    parts.push(`${String(m).padStart(2, "0")}m`);
+  }
+  parts.push(`${String(s).padStart(2, "0")}s`);
+  return parts.join(" ");
 }
 
 function MoDetail() {
@@ -39,16 +56,49 @@ function MoDetail() {
   const [editingComponents, setEditingComponents] = useState(false);
   const [editComponents, setEditComponents] = useState<{ productId: string; requiredQty: number }[]>([]);
 
-  useEffect(() => {
-    if (!mo) return;
-    const hasActiveWO = mo.workOrders.some(wo => wo.status === "Started");
-    if (mo.status !== "Done" && mo.status !== "Cancelled" && hasActiveWO) {
-      const interval = setInterval(() => {
-        refreshData();
-      }, 5000);
-      return () => clearInterval(interval);
+  // Consume WorkOrderContext instead of local timers
+  const { workOrders, startWorkOrder, completeWorkOrder } = useWorkOrderContext();
+  const moWorkOrders = workOrders.filter(wo => wo.moId === mo?.id);
+
+  const [summaryCollapsed, setSummaryCollapsed] = useState(false);
+
+  // Bottleneck calculations using live context work orders
+  let bottleneckWo: any = null;
+  let btOvertime = 0;
+
+  moWorkOrders.forEach(wo => {
+    const plannedSec = wo.plannedMinutes * 60;
+    const overtimeSec = wo.elapsedSeconds - plannedSec;
+    if (wo.elapsedSeconds > plannedSec) {
+      if (!bottleneckWo || overtimeSec > btOvertime) {
+        bottleneckWo = wo;
+        btOvertime = overtimeSec;
+      }
     }
-  }, [mo, refreshData]);
+  });
+
+  // Completed MO Summary variables
+  const startTimes = moWorkOrders.map(wo => wo.startedAt).filter((t): t is number => t !== null && t > 0);
+  const completionTimes = moWorkOrders.map(wo => wo.completedAt).filter((t): t is number => t !== null && t > 0);
+  
+  const minStartedAt = startTimes.length > 0 ? Math.min(...startTimes) : null;
+  const maxCompletedAt = completionTimes.length > 0 ? Math.max(...completionTimes) : null;
+  
+  const totalTimeMs = (minStartedAt && maxCompletedAt) ? (maxCompletedAt - minStartedAt) : 0;
+  const totalDurationMinutes = Math.round(totalTimeMs / 60000);
+  const totalPlannedMinutes = moWorkOrders.reduce((sum, wo) => sum + wo.plannedMinutes, 0);
+
+  function formatMinutesToHoursAndMinutes(mins: number) {
+    const h = Math.floor(mins / 60);
+    const m = Math.round(mins % 60);
+    return `${h ? `${h}h ` : ""}${m}m`;
+  }
+
+  function formatDurationBreakdown(secs: number) {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    return `${h ? `${h}h` : ""}${m}m`;
+  }
 
   if (!mo) return <p>Not found. <Link to="/manufacturing" className="text-accent">Back</Link></p>;
 
@@ -58,11 +108,12 @@ function MoDetail() {
   const triggerSO = salesOrders.find(s => s.id === mo.triggeringSalesOrderId);
   const isDraft = mo.status === "Draft";
   const isWaitingForMaterials = mo.status === "Waiting for Materials";
+  const hasTickets = (mo.shortageTickets || []).some(t => t.status === "OPEN");
 
-  function elapsed(wo: WorkOrder) {
-    const live = wo.status === "Started" && wo.startedAt ? Date.now() - wo.startedAt : 0;
-    return wo.accumulatedMs + live;
-  }
+  const STEPS = isWaitingForMaterials
+    ? ["Draft", "Confirmed", "Waiting for Materials", "In Progress", "Done"]
+    : ["Draft", "Confirmed", "In Progress", "Done"];
+
 
   function startEditComponents() {
     if (!mo) return;
@@ -200,8 +251,7 @@ function MoDetail() {
                           setEditComponents(updated);
                         }} />
                       </Field>
-                      <div className="flex flex-col gap-1.5">
-                        <span className="text-[12px] font-medium text-transparent select-none">_</span>
+                      <div className="flex flex-col gap-1.5 pb-[1px] justify-end">
                         <button
                           type="button"
                           onClick={() => setEditComponents(editComponents.filter((_, idx) => idx !== i))}
@@ -257,33 +307,179 @@ function MoDetail() {
 
         <section>
           <h2 className="mb-2 font-serif text-base font-semibold">Work orders</h2>
+          
+          {/* Completed MO Collapsible Summary Panel */}
+          {mo.status === "Done" && (
+            <div className="mb-4 overflow-hidden rounded-lg border border-border bg-card">
+              <button 
+                onClick={() => setSummaryCollapsed(!summaryCollapsed)}
+                className="w-full flex items-center justify-between bg-emerald-50/50 dark:bg-emerald-950/20 px-4 py-3 text-sm font-semibold text-emerald-800 dark:text-emerald-400 border-b hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <span>✅</span>
+                  <span>Manufacturing Order Completed</span>
+                </div>
+                <span className="text-xs font-normal underline">
+                  {summaryCollapsed ? "Show details" : "Collapse"}
+                </span>
+              </button>
+              
+              {!summaryCollapsed && (
+                <div className="p-4 space-y-3 text-xs text-muted-foreground">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div>
+                      <span className="font-medium text-foreground">Started:</span>{" "}
+                      {minStartedAt ? format(new Date(minStartedAt), "dd MMM yyyy, hh:mm a") : "—"}
+                    </div>
+                    <div>
+                      <span className="font-medium text-foreground">Completed:</span>{" "}
+                      {maxCompletedAt ? format(new Date(maxCompletedAt), "dd MMM yyyy, hh:mm a") : "—"}
+                    </div>
+                    <div>
+                      <span className="font-medium text-foreground">Total Time:</span>{" "}
+                      <span className="font-semibold text-foreground">
+                        {formatMinutesToHoursAndMinutes(totalDurationMinutes)}
+                      </span>{" "}
+                      (Planned: {formatMinutesToHoursAndMinutes(totalPlannedMinutes)})
+                    </div>
+                  </div>
+                  
+                  <div className="border-t pt-3 space-y-2">
+                    <div className="font-semibold text-foreground uppercase tracking-wider text-[10px]">
+                      Work Order Breakdown:
+                    </div>
+                    <ul className="space-y-1.5 font-mono text-[11px]">
+                      {moWorkOrders.map(wo => {
+                        const plannedSecs = wo.plannedMinutes * 60;
+                        const isOver = wo.elapsedSeconds > plannedSecs;
+                        const diffSecs = Math.abs(wo.elapsedSeconds - plannedSecs);
+                        
+                        return (
+                          <li key={wo.id} className="flex items-center justify-between gap-4 py-0.5 border-b last:border-b-0 border-dashed border-border">
+                            <span className="text-foreground">{wo.name}</span>
+                            <div className="flex items-center gap-3">
+                              <span className="text-foreground">{formatDurationBreakdown(wo.elapsedSeconds)}</span>
+                              {isOver ? (
+                                <span className="text-[#DC2626] font-semibold">
+                                  ⚠ +{formatDurationBreakdown(diffSecs)} over
+                                </span>
+                              ) : (
+                                <span className="text-success font-semibold">
+                                  ✓ within plan
+                                </span>
+                              )}
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {bottleneckWo ? (
+            <div className="mb-3 flex items-center gap-2 rounded-md border border-red-200 bg-red-50/50 p-2.5 text-xs font-medium text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-400">
+              <span className="text-base leading-none">🔴</span>
+              <span>Bottleneck detected: <strong>"{bottleneckWo.name}"</strong> — {formatSeconds(btOvertime)} over planned</span>
+            </div>
+          ) : (
+            <div className="mb-3 flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50/50 p-2.5 text-xs font-medium text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-400">
+              <span className="text-base leading-none">🟢</span>
+              <span>All work orders on schedule</span>
+            </div>
+          )}
           <ul className="space-y-2">
-            {mo.workOrders.map(wo => {
-              const live = wo.status === "Started";
-              const ms = elapsed(wo);
-              const overdue = ms > wo.plannedMinutes * 60000;
+            {moWorkOrders.map(wo => {
+              const elapsedSec = wo.elapsedSeconds;
+              const plannedSec = wo.plannedMinutes * 60;
+              const isOverdue = elapsedSec > plannedSec;
+              const overtimeSec = elapsedSec - plannedSec;
+              const isBottleneck = bottleneckWo && bottleneckWo.id === wo.id;
+              
               return (
                 <li key={wo.id} className="rounded-md border bg-card p-3">
+                  <style dangerouslySetInnerHTML={{__html: `
+                    @keyframes pulse {
+                      0% { transform: scale(0.95); opacity: 0.6; }
+                      50% { transform: scale(1.2); opacity: 1; }
+                      100% { transform: scale(0.95); opacity: 0.6; }
+                    }
+                    .animate-timer-pulse {
+                      animation: pulse 1.5s infinite ease-in-out;
+                    }
+                  `}} />
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="text-sm font-medium">{wo.name}</div>
-                      <div className="text-xs text-muted-foreground">{wcName(wo.workCenterId)} · planned {wo.plannedMinutes} min</div>
+                      <div className="text-xs text-muted-foreground">{wo.workCenter} · planned {wo.plannedMinutes} min</div>
                     </div>
-                    <StatusBadge status={wo.status} />
+                    <StatusBadge status={wo.status === "done" ? "Done" : wo.status === "started" ? "Started" : "Pending"} />
                   </div>
-                  <div className="mt-2 flex items-center justify-between gap-2">
-                    <div className={`font-mono tabular text-xs ${live ? "text-accent" : overdue ? "text-warning" : "text-muted-foreground"}`}>
-                      Elapsed {fmtMs(ms)}{live ? " ●" : ""}
+                  <div className="mt-2 flex items-end justify-between gap-2">
+                    <div className="flex flex-col gap-1.5">
+                      <div className={`font-mono tabular text-xs ${wo.status === "started" ? "text-[#C2623F] font-semibold" : "text-muted-foreground"}`}>
+                        Elapsed {formatSeconds(elapsedSec)}
+                        {wo.status === "started" && (
+                          <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#C2623F] ml-1.5 animate-timer-pulse align-middle" />
+                        )}
+                      </div>
+                      
+                      {wo.status === "done" && (
+                        <div className="space-y-1 text-[11px] font-mono text-muted-foreground border-t pt-1.5">
+                          <div>
+                            <span className="font-semibold text-foreground">Started:</span>{" "}
+                            {wo.startedAt ? format(new Date(wo.startedAt), "dd MMM yyyy, hh:mm a") : "—"}
+                          </div>
+                          <div>
+                            <span className="font-semibold text-foreground">Completed:</span>{" "}
+                            {wo.completedAt ? format(new Date(wo.completedAt), "dd MMM yyyy, hh:mm a") : "—"}
+                          </div>
+                          <div className={isOverdue ? "text-[#DC2626] font-semibold" : "text-success font-semibold"}>
+                            Duration: {formatSeconds(elapsedSec)} (Planned: {wo.plannedMinutes} min)
+                            <div className="mt-0.5">
+                              {isOverdue ? (
+                                <span>⚠ {formatSeconds(elapsedSec)} — {formatSeconds(overtimeSec)} over plan</span>
+                              ) : (
+                                <span>✓ {formatSeconds(elapsedSec)} — within plan</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    {writable && mo.status !== "Done" && mo.status !== "Cancelled" && wo.status !== "Completed" && (
-                      <div className="flex gap-1">
-                        {wo.status !== "Started" && (
-                          <Button variant="ghost" onClick={async () => { await setWorkOrderStatus(mo.id, wo.id, "Started"); await refreshData(); }}><Play className="h-3 w-3" /> Start</Button>
+                    {writable && mo.status !== "Done" && mo.status !== "Cancelled" && (
+                      <div className="flex gap-2">
+                        {wo.status === "pending" && (
+                          <button
+                            onClick={() => startWorkOrder(mo.id, wo.id)}
+                            className="px-3 py-1.5 text-xs font-semibold rounded-md border border-[#C2623F] text-[#C2623F] bg-transparent hover:bg-[#C2623F]/10 transition-colors"
+                          >
+                            Start
+                          </button>
                         )}
-                        {wo.status === "Started" && (
-                          <Button variant="ghost" onClick={async () => { await setWorkOrderStatus(mo.id, wo.id, "Paused"); await refreshData(); }}><Pause className="h-3 w-3" /> Pause</Button>
+                        {wo.status === "started" && (
+                          <>
+                            <button
+                              disabled
+                              className="px-3 py-1.5 text-xs font-semibold rounded-md bg-[#C2623F] text-white opacity-85 cursor-not-allowed animate-pulse"
+                            >
+                              Running…
+                            </button>
+                            <button
+                              onClick={() => completeWorkOrder(mo.id, wo.id)}
+                              className="px-3 py-1.5 text-xs font-semibold rounded-md bg-[#16A34A] text-white hover:bg-[#16A34A]/90 transition-colors"
+                            >
+                              Mark Complete ✓
+                            </button>
+                          </>
                         )}
-                        <Button variant="ghost" onClick={async () => { await setWorkOrderStatus(mo.id, wo.id, "Completed"); await refreshData(); }}><Check className="h-3 w-3" /> Done</Button>
+                        {wo.status === "done" && (
+                          <span className="px-2.5 py-1 text-xs font-semibold rounded-md bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400">
+                            Done ✓
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>

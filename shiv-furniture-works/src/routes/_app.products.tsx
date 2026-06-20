@@ -41,12 +41,62 @@ function ProductsPage() {
     { key: "cost", header: "Cost", align: "right", cell: p => p.costPrice ? `₹${p.costPrice.toLocaleString("en-IN")}` : "—", sortValue: p => p.costPrice },
     { key: "sale", header: "Sale", align: "right", cell: p => p.salePrice ? `₹${p.salePrice.toLocaleString("en-IN")}` : "—", sortValue: p => p.salePrice },
     { key: "onhand", header: "On Hand", align: "right", cell: p => p.onHand, sortValue: p => p.onHand },
-    { key: "reserved", header: "Reserved", align: "right", cell: p => <span className="text-muted-foreground">{p.reserved}</span>, sortValue: p => p.reserved },
+    {
+      key: "reserved",
+      header: "Reserved",
+      align: "right",
+      cell: p => {
+        if (!p.reservations || p.reservations.length === 0) {
+          return <span className="text-muted-foreground">—</span>;
+        }
+        const totalReserved = p.reservations.reduce((sum, r) => sum + r.reservedQty, 0);
+        return (
+          <div className="flex flex-col items-end gap-0.5">
+            <span className="font-semibold text-foreground">{totalReserved}</span>
+            <div className="flex flex-wrap justify-end gap-1 max-w-[120px]">
+              {p.reservations.map((r, idx) => (
+                <Link
+                  key={idx}
+                  to="/sales/$id"
+                  params={{ id: r.salesOrderId }}
+                  className="font-mono text-[10px] text-accent hover:underline shrink-0"
+                  onClick={e => e.stopPropagation()}
+                >
+                  {r.salesOrderNumber}({r.reservedQty})
+                </Link>
+              ))}
+            </div>
+          </div>
+        );
+      },
+      sortValue: p => p.reserved,
+    },
     { key: "free", header: "Free", align: "right", cell: p => <span className={freeToUse(p) <= p.reorderThreshold && p.reorderThreshold > 0 ? "font-semibold text-warning" : "font-semibold"}>{freeToUse(p)}</span>, sortValue: p => freeToUse(p) },
     { key: "strategy", header: "Strategy", cell: p => <StatusBadge status={p.strategy} />, sortValue: p => p.strategy },
-    { key: "status", header: "Status", cell: p => p.onHand <= p.reorderThreshold && p.reorderThreshold > 0
-      ? <span className="text-xs font-medium text-warning">Low stock</span>
-      : <span className="text-xs text-muted-foreground">OK</span> },
+    {
+      key: "status",
+      header: "Status",
+      cell: p => {
+        const free = freeToUse(p);
+        if (free <= 0) {
+          return <StatusBadge status="Out of Stock" />;
+        }
+        if (p.reserved > 0 && free > 0) {
+          return <StatusBadge status="Partially Reserved" />;
+        }
+        if (p.onHand <= p.reorderThreshold && p.reorderThreshold > 0) {
+          return <StatusBadge status="Low Stock" />;
+        }
+        return <StatusBadge status="OK" />;
+      },
+      sortValue: p => {
+        const free = freeToUse(p);
+        if (free <= 0) return 0;
+        if (p.reserved > 0 && free > 0) return 1;
+        if (p.onHand <= p.reorderThreshold && p.reorderThreshold > 0) return 2;
+        return 3;
+      },
+    },
   ];
 
   return (

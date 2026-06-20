@@ -7,12 +7,13 @@ import { Button, Input, Select, Field, StatusStepper, Sheet } from "@/components
 import type { SoStatus, SoLine } from "@/lib/erp/types";
 import { format } from "date-fns";
 import { ArrowLeft, FileText, Plus, Trash2, AlertTriangle } from "lucide-react";
+import { SpreadsheetImportButton } from "@/components/erp/SpreadsheetImport";
 
 export const Route = createFileRoute("/_app/sales/$id")({
   component: SalesDetail,
 });
 
-const STEPS = ["Draft", "Confirmed", "Partially Delivered", "Fully Delivered"];
+const STEPS = ["Draft", "Confirmed", "Ready for Delivery", "Fully Delivered"];
 
 function SalesDetail() {
   const { id } = Route.useParams();
@@ -52,6 +53,14 @@ function SalesDetail() {
   const customer = customers.find(c => c.id === (editCustomerId ?? so.customerId));
   const salesperson = users.find(u => u.id === (editSalespersonId ?? so.salespersonId ?? so.createdBy));
   const total = so.lines.reduce((a, l) => a + l.qty * l.unitPrice, 0);
+
+  const hasShortage = useMemo(() => {
+    return so.lines.some(line => {
+      const p = products.find(prod => prod.id === line.productId);
+      const free = p ? p.onHand - p.reserved : 0;
+      return free < line.qty;
+    });
+  }, [so.lines, products]);
 
   const triggered = [
     ...purchaseOrders.filter(p => p.triggeringSalesOrderId === so.id).map(p => ({ kind: "PO" as const, id: p.id, number: p.number, status: p.status })),
@@ -119,9 +128,20 @@ function SalesDetail() {
                   <Button variant="primary" onClick={handleConfirm}>Confirm</Button>
                   <Button variant="outline" onClick={() => setEditOpen(true)}>Edit Draft</Button>
                   <Button variant="danger" onClick={handleCancel}>Cancel</Button>
+                  <span title="Items not yet available for dispatch">
+                    <Button variant="primary" disabled>Deliver</Button>
+                  </span>
                 </>
               )}
-              {isDeliverable && (
+              {status === "Confirmed" && (
+                <>
+                  <span title="Items not yet available for dispatch">
+                    <Button variant="primary" disabled>Deliver</Button>
+                  </span>
+                  <Button variant="danger" onClick={handleCancel}>Cancel</Button>
+                </>
+              )}
+              {status === "Partially Delivered" && (
                 <>
                   <Button variant="primary" onClick={startDelivering}>Deliver</Button>
                   <Button variant="danger" onClick={handleCancel}>Cancel</Button>
@@ -149,7 +169,7 @@ function SalesDetail() {
       {/* ── Status stepper ── */}
       {status !== "Cancelled" ? (
         <div className="rounded-lg border bg-card p-4">
-          <StatusStepper steps={STEPS} current={status === "Fully Delivered" ? "Fully Delivered" : status} />
+          <StatusStepper steps={STEPS} current={status === "Partially Delivered" ? "Ready for Delivery" : status} />
         </div>
       ) : (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
@@ -157,6 +177,48 @@ function SalesDetail() {
             <AlertTriangle className="h-4 w-4" />
             <span className="font-medium">This order has been cancelled</span>
           </div>
+        </div>
+      )}
+
+      {/* ── Fulfillment Source / Smart Routing Banner ── */}
+      {!isTerminal && (
+        <div className={`rounded-lg border p-4 text-sm ${
+          status === "Partially Delivered" || (isDraft && !hasShortage)
+            ? "border-success/30 bg-success/5 text-success"
+            : "border-warning/30 bg-warning/5 text-warning"
+        }`}>
+          {isDraft && !hasShortage && (
+            <div className="flex items-start gap-2.5">
+              <div className="mt-1 h-2 w-2 rounded-full bg-success animate-pulse shrink-0" />
+              <div>
+                <span className="font-semibold">All items available in stock — ready to reserve.</span> Confirming this order will reserve the required quantities and move it directly to <span className="font-semibold">Ready for Delivery</span>.
+              </div>
+            </div>
+          )}
+          {isDraft && hasShortage && (
+            <div className="flex items-start gap-2.5">
+              <div className="mt-1 h-2 w-2 rounded-full bg-warning animate-pulse shrink-0" />
+              <div>
+                <span className="font-semibold">Stock shortage detected — will trigger auto-procurement.</span> Confirming this order will trigger auto-generated Manufacturing or Purchase Orders for the stock shortfall.
+              </div>
+            </div>
+          )}
+          {status === "Confirmed" && (
+            <div className="flex items-start gap-2.5">
+              <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
+              <div>
+                <span className="font-semibold">Fulfillment Source: Procurement & Auto-Routing.</span> One or more items in this order had insufficient stock and triggered auto-generated Manufacturing or Purchase Orders.
+              </div>
+            </div>
+          )}
+          {status === "Partially Delivered" && (
+            <div className="flex items-start gap-2.5">
+              <div className="mt-1 h-2 w-2 rounded-full bg-success shrink-0" />
+              <div>
+                <span className="font-semibold">Fulfillment Source: Current Inventory Stock.</span> All ordered items are fully reserved from current inventory stock. No manufacturing or purchasing required.
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -427,6 +489,23 @@ function EditSO({
           >
             <Plus className="h-3.5 w-3.5 mr-1" /> Add Requirement
           </Button>
+          <SpreadsheetImportButton
+            onImport={(rows) => {
+              const newLines = rows.map(r => {
+                const match = products.find((p: any) =>
+                  p.name.toLowerCase().includes(r.productName.toLowerCase()) ||
+                  r.productName.toLowerCase().includes(p.name.toLowerCase()) ||
+                  (p.sku && p.sku.toLowerCase() === r.productName.toLowerCase())
+                );
+                return {
+                  productId: match?.id || products[0]?.id || "",
+                  qty: r.qty,
+                  unitPrice: r.unitPrice || match?.salePrice || 0,
+                };
+              });
+              setLines((l: any) => [...l, ...newLines]);
+            }}
+          />
         </div>
         <div className="space-y-2">
           {lines.map((line: any, i: number) => (

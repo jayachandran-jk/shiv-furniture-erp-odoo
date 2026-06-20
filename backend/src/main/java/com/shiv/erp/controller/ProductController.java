@@ -30,17 +30,49 @@ public class ProductController {
     private final AuditLogService auditLogService;
     private final BoMRepository bomRepository;
     private final ProcurementService procurementService;
+    private final com.shiv.erp.repository.SalesOrderRepository salesOrderRepository;
 
     public ProductController(ProductRepository productRepository,
                              StockLedgerRepository stockLedgerRepository,
                              AuditLogService auditLogService,
                              BoMRepository bomRepository,
-                             ProcurementService procurementService) {
+                             ProcurementService procurementService,
+                             com.shiv.erp.repository.SalesOrderRepository salesOrderRepository) {
         this.productRepository = productRepository;
         this.stockLedgerRepository = stockLedgerRepository;
         this.auditLogService = auditLogService;
         this.bomRepository = bomRepository;
         this.procurementService = procurementService;
+        this.salesOrderRepository = salesOrderRepository;
+    }
+
+    private void populateProductReservations(List<Product> products) {
+        if (products == null || products.isEmpty()) return;
+
+        List<com.shiv.erp.model.SalesOrder> activeOrders = salesOrderRepository.findAll().stream()
+                .filter(so -> "Confirmed".equals(so.getStatus()) || "Partially Delivered".equals(so.getStatus()))
+                .collect(Collectors.toList());
+
+        Map<String, List<Product.ProductReservation>> resMap = new HashMap<>();
+
+        for (com.shiv.erp.model.SalesOrder so : activeOrders) {
+            if (so.getLines() == null) continue;
+            for (com.shiv.erp.model.SalesOrderLine line : so.getLines()) {
+                if (line.getReservedQty() != null && line.getReservedQty() > 0) {
+                    Product.ProductReservation pr = Product.ProductReservation.builder()
+                            .salesOrderId(so.getId())
+                            .salesOrderNumber(so.getNumber())
+                            .reservedQty(line.getReservedQty())
+                            .build();
+
+                    resMap.computeIfAbsent(line.getProductId(), k -> new java.util.ArrayList<>()).add(pr);
+                }
+            }
+        }
+
+        for (Product p : products) {
+            p.setReservations(resMap.getOrDefault(p.getId(), new java.util.ArrayList<>()));
+        }
     }
 
     @GetMapping
@@ -78,6 +110,8 @@ public class ProductController {
             return b.getCreatedAt().compareTo(a.getCreatedAt());
         });
 
+        populateProductReservations(products);
+
         return ResponseEntity.ok(products);
     }
 
@@ -88,6 +122,8 @@ public class ProductController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("error", "Product not found"));
         }
+
+        populateProductReservations(java.util.Arrays.asList(product));
 
         List<StockLedger> ledger = stockLedgerRepository.findTop10ByProductIdOrderByTsDesc(id);
 

@@ -22,8 +22,15 @@ public class PurchaseOrder {
     @Column(name = "vendor_id", length = 50)
     private String vendorId;
 
-    @Column(insertable = false, updatable = false)
+    @Column(name = "date")
     private LocalDateTime date;
+
+    @PrePersist
+    protected void onCreate() {
+        if (this.date == null) {
+            this.date = LocalDateTime.now();
+        }
+    }
 
     @Column(name = "expected_delivery_date")
     private LocalDateTime expectedDeliveryDate;

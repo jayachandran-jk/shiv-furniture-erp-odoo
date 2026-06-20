@@ -11,7 +11,7 @@ export const Route = createFileRoute("/_app/purchase/$id")({
   component: PurchaseDetail,
 });
 
-const STEPS = ["Draft", "Booked", "Confirmed", "Partially Received", "Fully Received"];
+// STEPS are defined dynamically based on status so skipped steps don't show
 
 function PurchaseDetail() {
   const { id } = Route.useParams();
@@ -28,6 +28,10 @@ function PurchaseDetail() {
   const vendor = vendors.find(v => v.id === po.vendorId);
   const total = po.lines.reduce((a, l) => a + l.qty * l.unitPrice, 0);
   const triggerSO = salesOrders.find(s => s.id === po.triggeringSalesOrderId);
+
+  const STEPS = po.status === "Partially Received" 
+    ? ["Draft", "Booked", "Confirmed", "Partially Received", "Fully Received"]
+    : ["Draft", "Booked", "Confirmed", "Fully Received"];
 
   return (
     <div className="space-y-5">

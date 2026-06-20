@@ -15,8 +15,15 @@ public class StockLedger {
     @Column(length = 50)
     private String id;
 
-    @Column(insertable = false, updatable = false)
+    @Column(name = "ts")
     private LocalDateTime ts;
+
+    @PrePersist
+    protected void onCreate() {
+        if (this.ts == null) {
+            this.ts = LocalDateTime.now();
+        }
+    }
 
     @Column(name = "product_id", length = 50, nullable = false)
     private String productId;

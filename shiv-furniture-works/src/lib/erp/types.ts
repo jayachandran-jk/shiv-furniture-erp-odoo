@@ -29,6 +29,11 @@ export interface Product {
   reserved: number;
   components?: BomComponent[]; // transient — used only during product creation
   isActive?: boolean;
+  reservations?: {
+    salesOrderId: string;
+    salesOrderNumber: string;
+    reservedQty: number;
+  }[];
 }
 
 export interface Vendor {
@@ -137,6 +142,7 @@ export interface WorkOrder {
   plannedMinutes: number;
   status: WoStatus;
   startedAt?: number; // ms epoch when last started
+  completedAt?: number; // ms epoch when completed
   accumulatedMs: number;
 }
 

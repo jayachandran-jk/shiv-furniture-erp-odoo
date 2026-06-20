@@ -31,8 +31,15 @@ public class SalesOrder {
     @Column(name = "salesperson_id", length = 36)
     private String salespersonId;
 
-    @Column(insertable = false, updatable = false)
+    @Column(name = "date")
     private LocalDateTime date;
+
+    @PrePersist
+    protected void onCreate() {
+        if (this.date == null) {
+            this.date = LocalDateTime.now();
+        }
+    }
 
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     @JoinColumn(name = "sales_order_id")

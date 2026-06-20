@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 const MAP: Record<string, string> = {
   "Draft": "bg-muted text-muted-foreground border-border",
   "Confirmed": "bg-primary/10 text-primary border-primary/20",
-  "Partially Delivered": "bg-warning/15 text-warning border-warning/30",
+  "Partially Delivered": "bg-success text-white border-transparent font-semibold",
   "Fully Delivered": "bg-success/15 text-success border-success/30",
   "Cancelled": "bg-destructive/10 text-destructive border-destructive/30",
   "Partially Received": "bg-warning/15 text-warning border-warning/30",
@@ -15,9 +15,14 @@ const MAP: Record<string, string> = {
   "Paused": "bg-warning/15 text-warning border-warning/30",
   "Active": "bg-success/15 text-success border-success/30",
   "Inactive": "bg-muted text-muted-foreground border-border",
+  "Out of Stock": "bg-destructive/10 text-destructive border-destructive/30 font-semibold",
+  "Partially Reserved": "bg-warning/15 text-warning border-warning/30 font-semibold",
+  "Low Stock": "bg-warning/15 text-warning border-warning/30 font-semibold",
+  "OK": "bg-success/15 text-success border-success/30 font-semibold",
 };
 
 export function StatusBadge({ status, className }: { status: string; className?: string }) {
+  const displayStatus = status === "Partially Delivered" ? "Ready for Delivery" : status;
   return (
     <span
       className={cn(
@@ -26,7 +31,7 @@ export function StatusBadge({ status, className }: { status: string; className?:
         className,
       )}
     >
-      {status}
+      {displayStatus}
     </span>
   );
 }

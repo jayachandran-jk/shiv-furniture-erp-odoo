@@ -3,9 +3,11 @@ import { useMemo, useState, useCallback } from "react";
 import { useERP } from "@/lib/erp/store";
 import { EmptyState } from "@/components/erp/StatusBadge";
 import { format } from "date-fns";
-import { Filter, RotateCcw, ChevronLeft, ChevronRight, Calendar, RefreshCw, Wifi } from "lucide-react";
+import { Filter, RotateCcw, ChevronLeft, ChevronRight, Calendar, RefreshCw, Wifi, Download } from "lucide-react";
 import { useEffect, useRef } from "react";
 import type { AuditEntry } from "@/lib/erp/types";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 export const Route = createFileRoute("/_app/audit")({
   head: () => ({ meta: [{ title: "Audit Logs — Shiv Furniture Works" }] }),
@@ -148,6 +150,7 @@ function AuditPage() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isLive, setIsLive] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const [totalPages, setTotalPages] = useState(1);
   const [totalElements, setTotalElements] = useState(0);
@@ -406,6 +409,131 @@ function AuditPage() {
         >
           <RotateCcw className="h-3.5 w-3.5" />
           Reset
+        </button>
+        <button
+          onClick={async () => {
+            setIsExporting(true);
+            // small delay so the button text updates
+            await new Promise(r => setTimeout(r, 50));
+            try {
+              const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+              const pw = doc.internal.pageSize.getWidth();
+              const ph = doc.internal.pageSize.getHeight();
+              const accent = [124, 92, 62] as [number, number, number]; // #7C5C3E
+              const dark = [26, 26, 46] as [number, number, number];   // #1a1a2e
+              const now = new Date();
+
+              // ── Header ──
+              doc.setFillColor(...dark);
+              doc.rect(0, 0, pw, 28, "F");
+              doc.setTextColor(255, 255, 255);
+              doc.setFontSize(16);
+              doc.setFont("helvetica", "bold");
+              doc.text("Shiv Furniture Works", 14, 11);
+              doc.setFontSize(11);
+              doc.setFont("helvetica", "normal");
+              doc.text("Audit Log Report", 14, 18);
+              doc.setFontSize(8);
+              doc.text(`Generated: ${format(now, "dd MMM yyyy, hh:mm a")}`, 14, 24);
+
+              // Active filters line
+              const filterParts: string[] = [];
+              if (applied.module) filterParts.push(`Module: ${applied.module}`);
+              if (applied.action) filterParts.push(`Action: ${applied.action}`);
+              if (applied.user) filterParts.push(`User: ${userName(applied.user)}`);
+              if (applied.dateFrom || applied.dateTo) filterParts.push(`Date: ${applied.dateFrom || "…"} – ${applied.dateTo || "…"}`);
+              if (filterParts.length > 0) {
+                doc.setFontSize(7);
+                doc.setTextColor(200, 200, 200);
+                doc.text(filterParts.join("  |  "), pw - 14, 24, { align: "right" });
+              }
+
+              // ── KPI Summary Row ──
+              let y = 34;
+              const kpiBoxW = (pw - 28 - 18) / 4; // 4 boxes with gaps
+              const kpiData = [
+                { label: "Total Logs", value: kpis.total, color: accent },
+                { label: "Created", value: kpis.creates, color: [34, 197, 94] as [number, number, number] },
+                { label: "Updated", value: kpis.updates, color: [245, 158, 11] as [number, number, number] },
+                { label: "Deleted", value: kpis.deletes, color: [239, 68, 68] as [number, number, number] },
+              ];
+              kpiData.forEach((k, i) => {
+                const x = 14 + i * (kpiBoxW + 6);
+                doc.setFillColor(245, 243, 240);
+                doc.roundedRect(x, y, kpiBoxW, 14, 2, 2, "F");
+                doc.setFillColor(...k.color);
+                doc.rect(x, y, 1.5, 14, "F");
+                doc.setFontSize(7);
+                doc.setTextColor(100, 100, 100);
+                doc.text(k.label, x + 5, y + 5);
+                doc.setFontSize(12);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(43, 38, 34);
+                doc.text(k.value.toLocaleString("en-IN"), x + 5, y + 12);
+                doc.setFont("helvetica", "normal");
+              });
+
+              // ── Table ──
+              const tableRows = filteredRows.map(a => [
+                a.ts ? format(new Date(a.ts), "dd MMM yyyy, hh:mm a") : "—",
+                userName(a.userId),
+                a.module,
+                a.recordType,
+                a.recordId,
+                a.action,
+                a.field || "—",
+                a.oldValue || "—",
+                a.newValue || "—",
+              ]);
+
+              autoTable(doc, {
+                startY: y + 20,
+                head: [["Date & Time", "User", "Module", "Record Type", "Record ID", "Action", "Field Changed", "Old Value", "New Value"]],
+                body: tableRows,
+                theme: "grid",
+                styles: { fontSize: 7, cellPadding: 2, textColor: [43, 38, 34], lineColor: [220, 220, 220], lineWidth: 0.2 },
+                headStyles: { fillColor: accent, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7 },
+                alternateRowStyles: { fillColor: [250, 248, 245] },
+                columnStyles: {
+                  0: { cellWidth: 38 },
+                  4: { cellWidth: 24, fontSize: 6 },
+                  5: { cellWidth: 22 },
+                  7: { cellWidth: 30 },
+                  8: { cellWidth: 30 },
+                },
+                didParseCell: (data: any) => {
+                  if (data.section === "body" && data.column.index === 5) {
+                    const action = String(data.cell.raw).toLowerCase();
+                    if (action.includes("creat")) data.cell.styles.textColor = [22, 163, 74];
+                    else if (action.includes("updat") || action.includes("confirm") || action.includes("deliver") || action.includes("receiv")) data.cell.styles.textColor = [217, 119, 6];
+                    else if (action.includes("delet") || action.includes("cancel")) data.cell.styles.textColor = [220, 38, 38];
+                  }
+                },
+                margin: { left: 14, right: 14 },
+                didDrawPage: (data: any) => {
+                  const pageCount = (doc as any).internal.getNumberOfPages();
+                  const currentPg = (doc as any).internal.getCurrentPageInfo().pageNumber;
+                  doc.setFontSize(7);
+                  doc.setTextColor(150, 150, 150);
+                  doc.text(`Page ${currentPg} of ${pageCount}`, pw / 2, ph - 6, { align: "center" });
+                  doc.text("Shiv Furniture Works", pw - 14, ph - 6, { align: "right" });
+                },
+              });
+
+              const filename = `Audit_Log_ShivFurniture_${format(now, "ddMMMyyyy")}.pdf`;
+              doc.save(filename);
+            } catch (err) {
+              console.error("PDF export failed:", err);
+              alert("Failed to generate PDF. Check console for details.");
+            } finally {
+              setIsExporting(false);
+            }
+          }}
+          disabled={isExporting || filteredRows.length === 0}
+          className="inline-flex h-[38px] items-center gap-1.5 rounded-md border border-gray-300 px-4 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+        >
+          <Download className="h-3.5 w-3.5" />
+          {isExporting ? "Generating…" : "Export PDF"}
         </button>
       </div>
 

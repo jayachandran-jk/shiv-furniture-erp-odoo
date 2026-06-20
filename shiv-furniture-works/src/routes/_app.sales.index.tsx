@@ -73,7 +73,7 @@ function SalesPage() {
         </div>
         <Select value={status} onChange={e => setStatus(e.target.value)} className="w-48">
           <option value="">All statuses</option>
-          {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+          {STATUSES.map(s => <option key={s} value={s}>{s === "Partially Delivered" ? "Ready for Delivery" : s}</option>)}
         </Select>
 
         {/* View toggle */}

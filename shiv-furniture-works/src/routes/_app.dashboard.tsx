@@ -4,6 +4,24 @@ import { ShoppingCart, Truck, Factory, AlertTriangle, ClipboardList, IndianRupee
 import { Section } from "@/components/erp/ui";
 import { formatDistanceToNow } from "date-fns";
 import { useState, useEffect } from "react";
+import { useWorkOrderContext } from "@/lib/erp/WorkOrderContext";
+
+function formatSeconds(totalSecs: number) {
+  if (totalSecs <= 0) return "00m 00s";
+  const h = Math.floor(totalSecs / 3600);
+  const m = Math.floor((totalSecs % 3600) / 60);
+  const s = totalSecs % 60;
+  
+  const parts = [];
+  if (h > 0) {
+    parts.push(`${h}h`);
+    parts.push(`${String(m).padStart(2, "0")}m`);
+  } else {
+    parts.push(`${String(m).padStart(2, "0")}m`);
+  }
+  parts.push(`${String(s).padStart(2, "0")}s`);
+  return parts.join(" ");
+}
 
 export const Route = createFileRoute("/_app/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard — Shiv Furniture Works" }] }),
@@ -15,6 +33,7 @@ function Dashboard() {
 
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [hoveredPoint, setHoveredPoint] = useState<number | null>(null);
 
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
@@ -79,6 +98,32 @@ function Dashboard() {
 
   const maxCount = Math.max(1, ...salesTrendData.map(d => d.count));
 
+  const chartWidth = 500;
+  const chartHeight = 160;
+  const paddingLeft = 45;
+  const paddingRight = 25;
+  const paddingTop = 25;
+  const paddingBottom = 30;
+  const graphWidth = chartWidth - paddingLeft - paddingRight;
+  const graphHeight = chartHeight - paddingTop - paddingBottom;
+
+  const salesPoints = salesTrendData.map((d, i) => {
+    const x = paddingLeft + (i * graphWidth) / (salesTrendData.length - 1);
+    const y = chartHeight - paddingBottom - (d.count / maxCount) * graphHeight;
+    return { x, y, label: d.label, count: d.count };
+  });
+
+  let linePath = "";
+  let areaPath = "";
+  if (salesPoints.length > 0) {
+    linePath = `M ${salesPoints[0].x} ${salesPoints[0].y} ` + 
+      salesPoints.slice(1).map(p => `L ${p.x} ${p.y}`).join(" ");
+
+    areaPath = `M ${salesPoints[0].x} ${chartHeight - paddingBottom} ` +
+      salesPoints.map(p => `L ${p.x} ${p.y}`).join(" ") +
+      ` L ${salesPoints[salesPoints.length - 1].x} ${chartHeight - paddingBottom} Z`;
+  }
+
   // Inventory Health Pie chart setup
   const activeProducts = products.filter(p => p.isActive !== false);
   const totalProducts = activeProducts.length;
@@ -116,19 +161,29 @@ function Dashboard() {
   const effCirc = 2 * Math.PI * effRadius;
   const effOffset = effCirc - (efficiencyPct / 100) * effCirc;
 
-  // Bottleneck: average actual minutes per work center across all MOs
-  const wcStats = workCenters.map(wc => {
-    let totalMs = 0, jobs = 0, pending = 0, done = 0;
-    for (const mo of manufacturingOrders) for (const wo of mo.workOrders) {
-      if (wo.workCenterId !== wc.id) continue;
-      if (wo.status === "Completed") { done++; jobs++; totalMs += wo.accumulatedMs; }
-      else pending++;
-    }
-    const avgMin = jobs ? totalMs / jobs / 60000 : 0;
-    return { wc, avgMin, jobs, pending, done };
-  });
-  const maxAvg = Math.max(1, ...wcStats.map(s => s.avgMin));
-  const bottleneck = wcStats.reduce((a, b) => (b.avgMin > a.avgMin ? b : a), wcStats[0]);
+  // Live bottleneck logic from shared WorkOrderContext
+  const { workOrders } = useWorkOrderContext();
+  const activeMOs = manufacturingOrders.filter(mo => mo.status !== "Done" && mo.status !== "Cancelled" && mo.status !== "Draft");
+  const hasActiveMO = activeMOs.length > 0;
+
+  let bottleneckWo: any = null;
+  let maxOvertime = 0;
+
+  if (hasActiveMO) {
+    const activeWoIds = new Set(activeMOs.flatMap(mo => (mo.workOrders || []).map(wo => wo.id)));
+    const relevantWos = workOrders.filter(wo => activeWoIds.has(wo.id));
+
+    relevantWos.forEach(wo => {
+      const plannedSecs = wo.plannedMinutes * 60;
+      const overtime = wo.elapsedSeconds - plannedSecs;
+      if (wo.elapsedSeconds > plannedSecs) {
+        if (overtime > maxOvertime) {
+          maxOvertime = overtime;
+          bottleneckWo = wo;
+        }
+      }
+    });
+  }
 
   const userName = (id: string) => users.find(u => u.id === id)?.name || id;
 
@@ -177,26 +232,79 @@ function Dashboard() {
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sales Trend</h3>
             <span className="text-[10px] text-muted-foreground font-medium">Last 7 Days</span>
           </div>
-          <div className="h-40 flex items-end justify-between gap-2 pt-4">
-            {salesTrendData.map((d, i) => {
-              const heightPct = maxCount > 0 ? (d.count / maxCount) * 100 : 0;
-              return (
-                <div key={i} className="flex-1 flex flex-col items-center gap-2 group">
-                  <div className="w-full relative flex justify-center">
-                    <div className="absolute bottom-full mb-1 opacity-0 group-hover:opacity-100 transition-opacity bg-popover text-popover-foreground text-[10px] rounded px-1.5 py-0.5 pointer-events-none whitespace-nowrap shadow border z-10">
-                      {d.count} {d.count === 1 ? 'order' : 'orders'}
-                    </div>
-                    <div 
-                      className="w-full rounded-t bg-primary/20 hover:bg-primary/40 transition-colors cursor-pointer relative"
-                      style={{ height: `${Math.max(4, (heightPct / 100) * 110)}px` }}
-                    >
-                      {d.count > 0 && <div className="absolute top-0 left-0 right-0 h-0.5 bg-primary rounded-t" />}
-                    </div>
-                  </div>
-                  <span className="text-[9px] text-muted-foreground text-center truncate w-full">{d.label}</span>
-                </div>
-              );
-            })}
+          <div className="relative h-40 pt-2">
+            {/* Tooltip */}
+            {hoveredPoint !== null && (
+              <div 
+                className="absolute bg-popover/95 backdrop-blur-md text-popover-foreground text-xs rounded-lg px-2.5 py-1.5 shadow-md border border-border z-10 pointer-events-none transition-all duration-200"
+                style={{
+                  left: `${(salesPoints[hoveredPoint].x / chartWidth) * 100}%`,
+                  top: `${(salesPoints[hoveredPoint].y / chartHeight) * 100 - 15}%`,
+                  transform: "translate(-50%, -100%)",
+                }}
+              >
+                <div className="font-semibold text-accent">{salesPoints[hoveredPoint].count} {salesPoints[hoveredPoint].count === 1 ? 'order' : 'orders'}</div>
+                <div className="text-[10px] text-muted-foreground">{salesPoints[hoveredPoint].label}</div>
+              </div>
+            )}
+            <svg className="w-full h-full" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--color-accent)" stopOpacity="0.35" />
+                  <stop offset="100%" stopColor="var(--color-accent)" stopOpacity="0.0" />
+                </linearGradient>
+              </defs>
+
+              {/* Horizontal Gridlines */}
+              <line x1={paddingLeft} y1={chartHeight - paddingBottom} x2={chartWidth - paddingRight} y2={chartHeight - paddingBottom} stroke="currentColor" className="text-border" strokeWidth="1" strokeDasharray="3 3" />
+              <line x1={paddingLeft} y1={chartHeight - paddingBottom - graphHeight / 2} x2={chartWidth - paddingRight} y2={chartHeight - paddingBottom - graphHeight / 2} stroke="currentColor" className="text-border/60" strokeWidth="1" strokeDasharray="3 3" />
+              <line x1={paddingLeft} y1={chartHeight - paddingBottom - graphHeight} x2={chartWidth - paddingRight} y2={chartHeight - paddingBottom - graphHeight} stroke="currentColor" className="text-border/60" strokeWidth="1" strokeDasharray="3 3" />
+
+              {/* Y Axis Labels */}
+              <text x={paddingLeft - 10} y={chartHeight - paddingBottom + 4} textAnchor="end" className="text-[10px] fill-muted-foreground font-medium">0</text>
+              <text x={paddingLeft - 10} y={chartHeight - paddingBottom - graphHeight / 2 + 4} textAnchor="end" className="text-[10px] fill-muted-foreground font-medium">{Math.round(maxCount / 2)}</text>
+              <text x={paddingLeft - 10} y={chartHeight - paddingBottom - graphHeight + 4} textAnchor="end" className="text-[10px] fill-muted-foreground font-medium">{maxCount}</text>
+
+              {/* X Axis Labels */}
+              {salesPoints.map((p, i) => (
+                <text key={i} x={p.x} y={chartHeight - 10} textAnchor="middle" className="text-[9px] fill-muted-foreground font-medium">{p.label}</text>
+              ))}
+
+              {/* Area path */}
+              {areaPath && <path d={areaPath} fill="url(#areaGradient)" />}
+
+              {/* Line path */}
+              {linePath && <path d={linePath} fill="none" stroke="var(--color-accent)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />}
+
+              {/* Active data point markers */}
+              {salesPoints.map((p, i) => (
+                <g key={i} className="cursor-pointer">
+                  {/* Invisible larger hover zone */}
+                  <circle cx={p.x} cy={p.y} r="12" fill="transparent" onMouseEnter={() => setHoveredPoint(i)} onMouseLeave={() => setHoveredPoint(null)} />
+                  
+                  {/* Glowing outer circle on hover */}
+                  <circle 
+                    cx={p.x} 
+                    cy={p.y} 
+                    r={hoveredPoint === i ? "7" : "5"} 
+                    fill="var(--color-accent)" 
+                    fillOpacity={hoveredPoint === i ? "0.4" : "0.2"} 
+                    className="transition-all duration-200 pointer-events-none" 
+                  />
+
+                  {/* Inner dot */}
+                  <circle 
+                    cx={p.x} 
+                    cy={p.y} 
+                    r={hoveredPoint === i ? "4" : "3"} 
+                    fill="var(--color-accent)" 
+                    stroke="white" 
+                    strokeWidth="1.5"
+                    className="transition-all duration-200 pointer-events-none"
+                  />
+                </g>
+              ))}
+            </svg>
           </div>
         </div>
 
@@ -208,71 +316,109 @@ function Dashboard() {
           </div>
           <div className="flex items-center justify-around gap-2 h-40">
             <div className="relative w-28 h-28 flex items-center justify-center shrink-0">
-              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 120 120">
+                <defs>
+                  {/* Drop shadows for glow effects */}
+                  <filter id="glow-emerald" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur stdDeviation="3" result="blur" />
+                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                  </filter>
+                  <filter id="glow-amber" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur stdDeviation="3" result="blur" />
+                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                  </filter>
+                  <filter id="glow-red" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur stdDeviation="3" result="blur" />
+                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                  </filter>
+                  {/* Glassmorphic lens gradient */}
+                  <radialGradient id="glassGradient" cx="50%" cy="50%" r="50%" fx="30%" fy="30%">
+                    <stop offset="0%" stopColor="var(--card)" stopOpacity="0.8" />
+                    <stop offset="100%" stopColor="var(--muted)" stopOpacity="0.2" />
+                  </radialGradient>
+                </defs>
+
+                {/* Outer decorative track */}
                 <circle 
-                  cx="50" 
-                  cy="50" 
-                  r={radius} 
-                  className="stroke-muted" 
-                  strokeWidth="8" 
+                  cx="60" 
+                  cy="60" 
+                  r="45" 
+                  className="stroke-muted/30" 
+                  strokeWidth="10" 
                   fill="transparent" 
                 />
+
+                {/* Inner glass lens */}
+                <circle 
+                  cx="60" 
+                  cy="60" 
+                  r="35" 
+                  fill="url(#glassGradient)" 
+                  stroke="currentColor" 
+                  className="text-border/40" 
+                  strokeWidth="1" 
+                />
+
+                {/* Segment arcs */}
                 {inStockCount > 0 && (
                   <circle 
-                    cx="50" 
-                    cy="50" 
-                    r={radius} 
+                    cx="60" 
+                    cy="60" 
+                    r="45" 
                     className="stroke-emerald-500 transition-all duration-500" 
-                    strokeWidth="8" 
+                    strokeWidth="10" 
                     fill="transparent" 
-                    strokeDasharray={`${(inPct / 100) * circ} ${circ}`} 
-                    strokeDashoffset={inOffset}
+                    strokeDasharray={`${(inPct / 100) * (2 * Math.PI * 45)} ${(2 * Math.PI * 45)}`} 
+                    strokeDashoffset={-(inOffset / circ) * (2 * Math.PI * 45)}
                     strokeLinecap="round"
+                    filter="url(#glow-emerald)"
                   />
                 )}
                 {lowStockCount > 0 && (
                   <circle 
-                    cx="50" 
-                    cy="50" 
-                    r={radius} 
+                    cx="60" 
+                    cy="60" 
+                    r="45" 
                     className="stroke-amber-500 transition-all duration-500" 
-                    strokeWidth="8" 
+                    strokeWidth="10" 
                     fill="transparent" 
-                    strokeDasharray={`${(lowPct / 100) * circ} ${circ}`} 
-                    strokeDashoffset={lowOffset}
+                    strokeDasharray={`${(lowPct / 100) * (2 * Math.PI * 45)} ${(2 * Math.PI * 45)}`} 
+                    strokeDashoffset={-(lowOffset / circ) * (2 * Math.PI * 45)}
                     strokeLinecap="round"
+                    filter="url(#glow-amber)"
                   />
                 )}
                 {outOfStockCount > 0 && (
                   <circle 
-                    cx="50" 
-                    cy="50" 
-                    r={radius} 
+                    cx="60" 
+                    cy="60" 
+                    r="45" 
                     className="stroke-red-500 transition-all duration-500" 
-                    strokeWidth="8" 
+                    strokeWidth="10" 
                     fill="transparent" 
-                    strokeDasharray={`${(oosPct / 100) * circ} ${circ}`} 
-                    strokeDashoffset={oosOffset}
+                    strokeDasharray={`${(oosPct / 100) * (2 * Math.PI * 45)} ${(2 * Math.PI * 45)}`} 
+                    strokeDashoffset={-(oosOffset / circ) * (2 * Math.PI * 45)}
                     strokeLinecap="round"
+                    filter="url(#glow-red)"
                   />
                 )}
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center leading-none">
-                <span className="text-[10px] text-muted-foreground uppercase">Healthy</span>
-                <span className="text-base font-bold mt-1 text-emerald-500">{Math.round(inPct)}%</span>
+                <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">Healthy</span>
+                <span className="text-lg font-bold mt-1 text-emerald-500">{Math.round(inPct)}%</span>
               </div>
             </div>
-            <div className="text-[11px] space-y-1.5 shrink-0">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+            <div className="text-[11px] space-y-2 shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] shrink-0" />
                 <span className="text-muted-foreground font-medium truncate">{inStockCount} In Stock</span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)] shrink-0" />
                 <span className="text-muted-foreground font-medium truncate">{lowStockCount} Low Stock</span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)] shrink-0" />
                 <span className="text-muted-foreground font-medium truncate">{outOfStockCount} Out of Stock</span>
               </div>
             </div>
@@ -287,42 +433,71 @@ function Dashboard() {
           </div>
           <div className="flex items-center justify-around gap-2 h-40">
             <div className="relative w-28 h-28 flex items-center justify-center shrink-0">
-              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 120 120">
+                <defs>
+                  {/* Glow filter */}
+                  <filter id="glow-primary" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur stdDeviation="3" result="blur" />
+                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                  </filter>
+                  {/* Gradient for efficiency ring */}
+                  <linearGradient id="effGradient" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="var(--color-primary)" />
+                    <stop offset="100%" stopColor="var(--color-accent)" />
+                  </linearGradient>
+                </defs>
+
+                {/* Background track */}
                 <circle 
-                  cx="50" 
-                  cy="50" 
-                  r={effRadius} 
-                  className="stroke-muted" 
-                  strokeWidth="8" 
+                  cx="60" 
+                  cy="60" 
+                  r="45" 
+                  className="stroke-muted/30" 
+                  strokeWidth="10" 
                   fill="transparent" 
                 />
+
+                {/* Inner glass lens */}
                 <circle 
-                  cx="50" 
-                  cy="50" 
-                  r={effRadius} 
-                  className="stroke-primary transition-all duration-500" 
-                  strokeWidth="8" 
+                  cx="60" 
+                  cy="60" 
+                  r="35" 
+                  fill="url(#glassGradient)" 
+                  stroke="currentColor" 
+                  className="text-border/40" 
+                  strokeWidth="1" 
+                />
+
+                {/* Progress arc */}
+                <circle 
+                  cx="60" 
+                  cy="60" 
+                  r="45" 
+                  stroke="url(#effGradient)" 
+                  className="transition-all duration-500" 
+                  strokeWidth="10" 
                   fill="transparent" 
-                  strokeDasharray={effCirc} 
-                  strokeDashoffset={effOffset}
+                  strokeDasharray={2 * Math.PI * 45} 
+                  strokeDashoffset={(effOffset / effCirc) * (2 * Math.PI * 45)}
                   strokeLinecap="round"
+                  filter="url(#glow-primary)"
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center leading-none">
-                <span className="text-[10px] text-muted-foreground uppercase">Done Rate</span>
-                <span className="text-base font-bold mt-1 text-primary">{efficiencyPct}%</span>
+                <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">Done Rate</span>
+                <span className="text-lg font-bold mt-1 text-primary">{efficiencyPct}%</span>
               </div>
             </div>
-            <div className="text-[11px] space-y-1.5 shrink-0">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
+            <div className="text-[11px] space-y-2 shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-primary shrink-0" />
                 <span className="text-muted-foreground font-medium">{doneMOs} Completed</span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-muted-foreground/30 shrink-0" />
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-muted-foreground/30 shrink-0" />
                 <span className="text-muted-foreground font-medium">{inProgressMOs} In Progress</span>
               </div>
-              <div className="pt-1.5 border-t border-border mt-1 text-[10px] text-muted-foreground">
+              <div className="pt-2 border-t border-border mt-1.5 text-[10px] text-muted-foreground">
                 Total MOs: {totalMOs}
               </div>
             </div>
@@ -333,33 +508,35 @@ function Dashboard() {
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-3">
           <Section title="Bottleneck detector">
-            <div className="rounded-lg border bg-card p-4">
-              <div className="space-y-3">
-                {wcStats.map(s => {
-                  const isBottle = s.wc.id === bottleneck.wc.id && s.avgMin > 0;
-                  const pct = (s.avgMin / maxAvg) * 100;
-                  return (
-                    <div key={s.wc.id} className={`rounded-md border-l-4 pl-3 ${isBottle ? "border-l-warning" : "border-l-transparent"}`}>
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{s.wc.name}</span>
-                          {isBottle && <span className="rounded-md border border-warning/30 bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning">Bottleneck</span>}
-                        </div>
-                        <span className="tabular text-xs text-muted-foreground">
-                          {s.avgMin ? `${s.avgMin.toFixed(0)} min avg` : "—"} · {s.done} done · {s.pending} pending
-                        </span>
-                      </div>
-                      <div className="mt-1 h-2 w-full rounded bg-muted overflow-hidden">
-                        <div className={isBottle ? "h-full bg-warning" : "h-full bg-primary/50"} style={{ width: `${pct}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
+            {!hasActiveMO ? (
+              <div className="rounded-lg border bg-card p-5 flex flex-col items-center justify-center min-h-[140px] text-center">
+                <span className="text-xl mb-1">⚪</span>
+                <span className="text-sm font-semibold text-muted-foreground">No active manufacturing order</span>
               </div>
-              <p className="mt-4 text-[11px] text-muted-foreground">
-                Compares average actual time per completed work order across work centers. The slowest is flagged so you can rebalance staff.
-              </p>
-            </div>
+            ) : !bottleneckWo ? (
+              <div className="rounded-lg border bg-card p-5 flex flex-col items-center justify-center min-h-[140px] text-center">
+                <span className="text-xl mb-1">🟢</span>
+                <span className="text-sm font-semibold text-success">No Bottleneck</span>
+                <span className="text-xs text-muted-foreground mt-1">All work orders are within planned time</span>
+              </div>
+            ) : (
+              <div className="rounded-lg border bg-card p-5 space-y-4">
+                <div className="flex items-center gap-2 text-sm font-semibold text-[#DC2626]">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#DC2626] animate-ping" />
+                  <span>🔴 Bottleneck Detected</span>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                    <span className="text-sm font-semibold text-foreground">"{bottleneckWo.name}"</span>
+                    <span className="text-xs font-semibold text-[#DC2626]">{formatSeconds(maxOvertime)} over planned</span>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground space-y-1">
+                    <div>Work Center: <span className="font-medium text-foreground">{bottleneckWo.workCenter}</span></div>
+                    <div>Impact: <span className="text-[#C2623F] font-medium">Delays all downstream tasks</span></div>
+                  </div>
+                </div>
+              </div>
+            )}
           </Section>
         </div>
         <div>
