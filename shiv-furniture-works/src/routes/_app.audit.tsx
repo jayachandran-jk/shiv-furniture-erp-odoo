@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { useERP } from "@/lib/erp/store";
 import { EmptyState } from "@/components/erp/StatusBadge";
 import { format } from "date-fns";
-import { Filter, RotateCcw, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
-import { useEffect } from "react";
+import { Filter, RotateCcw, ChevronLeft, ChevronRight, Calendar, RefreshCw, Wifi } from "lucide-react";
+import { useEffect, useRef } from "react";
 import type { AuditEntry } from "@/lib/erp/types";
 
 export const Route = createFileRoute("/_app/audit")({
@@ -13,6 +13,7 @@ export const Route = createFileRoute("/_app/audit")({
 });
 
 const PAGE_SIZE = 20;
+const POLL_INTERVAL_MS = 10_000; // 10 seconds
 
 /* ─────────────── helpers ─────────────── */
 
@@ -89,7 +90,7 @@ function ActionBadge({ action }: { action: string }) {
   const lower = action.toLowerCase();
   let cls = "bg-gray-50 text-gray-700 border-gray-200";
   if (lower.includes("creat")) cls = "bg-green-50 text-green-700 border-green-200";
-  else if (lower.includes("updat") || lower.includes("confirm") || lower.includes("book") || lower.includes("receiv") || lower.includes("complet") || lower.includes("status")) cls = "bg-amber-50 text-amber-700 border-amber-200";
+  else if (lower.includes("updat") || lower.includes("confirm") || lower.includes("book") || lower.includes("receiv") || lower.includes("complet") || lower.includes("status") || lower.includes("deliver")) cls = "bg-amber-50 text-amber-700 border-amber-200";
   else if (lower.includes("delet") || lower.includes("cancel")) cls = "bg-red-50 text-red-700 border-red-200";
 
   return (
@@ -97,6 +98,34 @@ function ActionBadge({ action }: { action: string }) {
       {action}
     </span>
   );
+}
+
+function mapLog(a: any): AuditEntry {
+  let mod = "System";
+  const et = a.entityType;
+  if (et === "Product") mod = "Products";
+  else if (et === "SalesOrder") mod = "Sales";
+  else if (et === "PurchaseOrder" || et === "Vendor") mod = "Purchase";
+  else if (et === "ManufacturingOrder" || et === "WorkCenter" || et === "WorkOrder") mod = "Manufacturing";
+  else if (et === "User") mod = "Settings";
+  else if (et === "BoM" || et === "BILL_OF_MATERIALS") mod = "Bill of Materials";
+  else if (et === "Customer") mod = "Sales";
+  else if (et === "StockLedger") mod = "Inventory";
+
+  const formatted = formatAuditChanges(a.oldValue, a.newValue);
+
+  return {
+    id: a.id,
+    ts: a.ts || new Date().toISOString(),
+    userId: a.userId || "system",
+    module: mod,
+    recordType: a.entityType,
+    recordId: a.entityId,
+    action: a.action,
+    field: formatted.field,
+    oldValue: formatted.oldValue,
+    newValue: formatted.newValue,
+  };
 }
 
 /* ─────────────── main page ─────────────── */
@@ -115,7 +144,12 @@ function AuditPage() {
   // applied filters (only apply on Filter button click)
   const [applied, setApplied] = useState({ dateFrom: "", dateTo: "", user: "", module: "", action: "" });
 
-  const userName = (id: string) => users.find(u => u.id === id)?.name || id;
+  // live state
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [isLive, setIsLive] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const userName = (id: string) => users.find(u => u.id === id)?.name || (id === "system" ? "System" : id);
 
   const allModules = ["Sales", "Purchase", "Manufacturing", "Products", "Inventory", "Bill of Materials", "Settings"];
 
@@ -125,86 +159,87 @@ function AuditPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalElements, setTotalElements] = useState(0);
 
-  // Fetch summary on load
-  useEffect(() => {
-    const fetchSummary = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        const headers: HeadersInit = { "Content-Type": "application/json" };
-        if (token) headers["Authorization"] = `Bearer ${token}`;
-        const response = await fetch(`http://localhost:4000/api/audit-logs/summary`, { headers });
-        if (response.ok) {
-          const data = await response.json();
-          setKpis({
-            total: data.totalLogs || 0,
-            creates: data.createCount || 0,
-            updates: data.updateCount || 0,
-            deletes: data.deleteCount || 0
-          });
-        }
-      } catch (err) {
-        console.error("Failed to fetch audit log summary", err);
+  const getAuthHeaders = (): HeadersInit => {
+    const token = localStorage.getItem("token");
+    const headers: HeadersInit = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    return headers;
+  };
+
+  // Fetch summary
+  const fetchSummary = useCallback(async () => {
+    try {
+      const response = await fetch(`http://localhost:4000/api/audit-logs/summary`, {
+        headers: getAuthHeaders(),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setKpis({
+          total: data.totalLogs || 0,
+          creates: data.createCount || 0,
+          updates: data.updateCount || 0,
+          deletes: data.deleteCount || 0,
+        });
       }
-    };
-    fetchSummary();
+    } catch (err) {
+      // silently fail on poll errors
+    }
   }, []);
 
   // Fetch paginated data
-  useEffect(() => {
-    const fetchPage = async () => {
-      try {
-        const params = new URLSearchParams();
-        params.append("page", page.toString());
-        params.append("size", PAGE_SIZE.toString());
-        if (applied.dateFrom) params.append("from", applied.dateFrom);
-        if (applied.dateTo) params.append("to", applied.dateTo);
-        if (applied.user) params.append("user", applied.user);
-        if (applied.module) params.append("module", applied.module);
-        if (applied.action) params.append("action", applied.action);
+  const fetchPage = useCallback(async (silent = false) => {
+    try {
+      if (!silent) setIsRefreshing(true);
+      const params = new URLSearchParams();
+      params.append("page", page.toString());
+      params.append("size", PAGE_SIZE.toString());
+      if (applied.dateFrom) params.append("from", applied.dateFrom);
+      if (applied.dateTo) params.append("to", applied.dateTo);
+      if (applied.user) params.append("user", applied.user);
+      if (applied.module) params.append("module", applied.module);
+      if (applied.action) params.append("action", applied.action);
 
-        const token = localStorage.getItem("token");
-        const headers: HeadersInit = { "Content-Type": "application/json" };
-        if (token) headers["Authorization"] = `Bearer ${token}`;
-        
-        const response = await fetch(`http://localhost:4000/api/audit-logs?${params.toString()}`, { headers });
-        if (response.ok) {
-          const data = await response.json();
-          // Map backend AuditLog to frontend AuditEntry format
-          const mappedLogs = (data.content || []).map((a: any) => {
-            let mod = "System";
-            const et = a.entityType;
-            if (et === "Product") mod = "Products";
-            else if (et === "SalesOrder") mod = "Sales";
-            else if (et === "PurchaseOrder" || et === "Vendor") mod = "Purchase";
-            else if (et === "ManufacturingOrder" || et === "WorkCenter" || et === "WorkOrder") mod = "Manufacturing";
-            else if (et === "User") mod = "Settings";
-            else if (et === "BoM" || et === "BILL_OF_MATERIALS") mod = "Bill of Materials";
-
-            const formatted = formatAuditChanges(a.oldValue, a.newValue);
-
-            return {
-              id: a.id,
-              ts: a.ts || new Date().toISOString(),
-              userId: a.userId || "system",
-              module: mod,
-              recordType: a.entityType,
-              recordId: a.entityId,
-              action: a.action,
-              field: formatted.field,
-              oldValue: formatted.oldValue,
-              newValue: formatted.newValue,
-            };
-          });
-          setPageRows(mappedLogs);
-          setTotalPages(data.totalPages || 1);
-          setTotalElements(data.totalElements || 0);
-        }
-      } catch (err) {
-        console.error("Failed to fetch audit logs", err);
+      const response = await fetch(`http://localhost:4000/api/audit-logs?${params.toString()}`, {
+        headers: getAuthHeaders(),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const mappedLogs = (data.content || []).map(mapLog);
+        setPageRows(mappedLogs);
+        setTotalPages(data.totalPages || 1);
+        setTotalElements(data.totalElements || 0);
+        setLastUpdated(new Date());
       }
-    };
-    fetchPage();
+    } catch (err) {
+      // silently fail on poll errors
+    } finally {
+      setIsRefreshing(false);
+    }
   }, [page, applied]);
+
+  // Initial load and when page/filters change
+  useEffect(() => {
+    fetchSummary();
+    fetchPage(false);
+  }, [fetchSummary, fetchPage]);
+
+  // Auto-poll every 10 seconds
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!isLive) {
+      if (timerRef.current) clearInterval(timerRef.current);
+      return;
+    }
+    timerRef.current = setInterval(() => {
+      fetchSummary();
+      fetchPage(true); // silent refresh — no spinner
+    }, POLL_INTERVAL_MS);
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [isLive, fetchSummary, fetchPage]);
 
   const currentPage = Math.min(page, totalPages);
   const pageStart = (currentPage - 1) * PAGE_SIZE;
@@ -219,6 +254,11 @@ function AuditPage() {
     setDateFrom(""); setDateTo(""); setUserFilter(""); setModuleFilter(""); setActionFilter("");
     setApplied({ dateFrom: "", dateTo: "", user: "", module: "", action: "" });
     setPage(1);
+  };
+
+  const handleManualRefresh = () => {
+    fetchSummary();
+    fetchPage(false);
   };
 
   // generate page numbers for pagination
@@ -240,6 +280,39 @@ function AuditPage() {
 
   return (
     <div className="space-y-5">
+      {/* ── Live Header Bar ── */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          {/* Live toggle */}
+          <button
+            onClick={() => setIsLive(v => !v)}
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold border transition-colors ${
+              isLive
+                ? "bg-green-50 text-green-700 border-green-200"
+                : "bg-gray-50 text-gray-500 border-gray-200"
+            }`}
+            title={isLive ? "Click to pause live updates" : "Click to resume live updates"}
+          >
+            <span className={`inline-block h-2 w-2 rounded-full ${isLive ? "bg-green-500 animate-pulse" : "bg-gray-400"}`} />
+            {isLive ? "Live" : "Paused"}
+          </button>
+          {lastUpdated && (
+            <span className="text-xs text-gray-400">
+              Last updated: {format(lastUpdated, "hh:mm:ss a")}
+            </span>
+          )}
+        </div>
+        <button
+          onClick={handleManualRefresh}
+          disabled={isRefreshing}
+          className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          title="Refresh now"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+          Refresh
+        </button>
+      </div>
+
       {/* ── SECTION 1: KPI Cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard label="Total Logs" value={kpis.total} sub="All time logs" borderColor="#7C5C3E" />
@@ -324,27 +397,26 @@ function AuditPage() {
 
       {/* ── SECTION 3: Audit Log Table ── */}
       {totalElements === 0 ? (
-        <EmptyState title="No audit entries match" hint="System actions write to this log automatically." />
+        <EmptyState title="No audit entries match" hint="System actions write to this log automatically. Try refreshing if you just performed an action." />
       ) : (
         <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-[#FAF8F5] text-left">
-                  <th className="px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide w-44">Date & Time</th>
+                  <th className="px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide w-44">Date &amp; Time</th>
                   <th className="px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide w-32">User</th>
                   <th className="px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide w-28">Module</th>
                   <th className="px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide w-40">Record Type</th>
                   <th className="px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide w-32">Record ID</th>
-                  <th className="px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide w-24">Action</th>
+                  <th className="px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide w-28">Action</th>
                   <th className="px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide w-32">Field Changed</th>
-                  <th className="px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide w-24">Old Value</th>
-                  <th className="px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide w-24">New Value</th>
+                  <th className="px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide w-36">Old Value</th>
+                  <th className="px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide w-36">New Value</th>
                 </tr>
               </thead>
               <tbody>
                 {pageRows.map(a => {
-                  const isCreatedOrDeleted = a.action.toLowerCase().includes("creat") || a.action.toLowerCase().includes("delet") || a.action.toLowerCase().includes("cancel");
                   const oldNum = parseNumeric(a.oldValue);
                   const newNum = parseNumeric(a.newValue);
                   let newValueColor = "text-[#2B2622]";
@@ -355,8 +427,8 @@ function AuditPage() {
 
                   return (
                     <tr key={a.id} className="border-b border-gray-100 hover:bg-[#FAF8F5] transition-colors">
-                      <td className="px-3 py-2.5 text-sm text-[#2B2622]">
-                        {format(new Date(a.ts), "dd MMM yyyy, hh:mm a")}
+                      <td className="px-3 py-2.5 text-sm text-[#2B2622] whitespace-nowrap">
+                        {a.ts ? format(new Date(a.ts), "dd MMM yyyy, hh:mm:ss a") : "—"}
                       </td>
                       <td className="px-3 py-2.5 text-sm text-[#2B2622]">
                         {userName(a.userId)}
@@ -373,13 +445,13 @@ function AuditPage() {
                       <td className="px-3 py-2.5">
                         <ActionBadge action={a.action} />
                       </td>
-                      <td className="px-3 py-2.5 text-sm text-[#2B2622]">
+                      <td className="px-3 py-2.5 text-sm text-[#2B2622] max-w-[160px] truncate" title={a.field}>
                         {a.field || <span className="text-gray-300">—</span>}
                       </td>
-                      <td className="px-3 py-2.5 text-sm text-[#2B2622]">
+                      <td className="px-3 py-2.5 text-sm text-[#2B2622] max-w-[180px] truncate" title={a.oldValue}>
                         {a.oldValue || <span className="text-gray-300">—</span>}
                       </td>
-                      <td className={`px-3 py-2.5 text-sm ${newValueColor}`}>
+                      <td className={`px-3 py-2.5 text-sm ${newValueColor} max-w-[180px] truncate`} title={a.newValue}>
                         {a.newValue || <span className="text-gray-300">—</span>}
                       </td>
                     </tr>

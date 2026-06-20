@@ -66,6 +66,7 @@ interface State {
   upsertBom: (bom: BoM) => Promise<void>;
   deactivateBom: (id: string) => Promise<void>;
   createWorkCenter: (wc: { name: string; description?: string; capacityPerDay?: number }) => Promise<WorkCenter>;
+  createCustomer: (c: { name: string; contact?: string; address?: string }) => Promise<Customer>;
   refreshData: () => Promise<void>;
 }
 
@@ -433,6 +434,16 @@ export const useERP = create<State>()(
       createProduct: async (p) => {
         await apiCall("/api/products", "POST", p);
         await get().refreshData();
+      },
+
+      createCustomer: async (c) => {
+        const saved = await apiCall("/api/customers", "POST", {
+          name: c.name,
+          contact: c.contact || "",
+          address: c.address || "",
+        });
+        await get().refreshData();
+        return saved;
       },
 
       updateProduct: async (id, patch) => {

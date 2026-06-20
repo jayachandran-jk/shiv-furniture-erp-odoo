@@ -15,7 +15,7 @@ public class AuditLog {
     @Column(length = 50)
     private String id;
 
-    @Column(insertable = false, updatable = false)
+    @Column(name = "ts")
     private LocalDateTime ts;
 
     @Column(name = "user_id", length = 36)

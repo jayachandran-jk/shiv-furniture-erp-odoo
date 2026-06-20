@@ -4,6 +4,7 @@ import com.shiv.erp.model.AuditLog;
 import com.shiv.erp.repository.AuditLogRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Service
@@ -19,6 +20,7 @@ public class AuditLogService {
     public void logChange(String userId, String entityType, String entityId, String action, String oldValue, String newValue) {
         AuditLog log = AuditLog.builder()
                 .id("a-" + UUID.randomUUID().toString().substring(0, 8))
+                .ts(LocalDateTime.now())
                 .userId(userId)
                 .entityType(entityType)
                 .entityId(entityId)
