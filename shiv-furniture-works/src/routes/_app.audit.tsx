@@ -514,8 +514,8 @@ function AuditPage() {
                   },
                   margin: { left: 14, right: 14 },
                   didDrawPage: (data: any) => {
-                    const pageCount = doc.internal.getNumberOfPages();
-                    const currentPg = doc.internal.getCurrentPageInfo().pageNumber;
+                    const pageCount = (doc.internal as any).getNumberOfPages();
+                    const currentPg = (doc.internal as any).getCurrentPageInfo().pageNumber;
                     doc.setFontSize(7);
                     doc.setTextColor(150, 150, 150);
                     doc.text(`Page ${currentPg} of ${pageCount}`, pw / 2, ph - 6, { align: "center" });
@@ -548,8 +548,8 @@ function AuditPage() {
                   },
                   margin: { left: 14, right: 14 },
                   didDrawPage: (data: any) => {
-                    const pageCount = doc.internal.getNumberOfPages();
-                    const currentPg = doc.internal.getCurrentPageInfo().pageNumber;
+                    const pageCount = (doc.internal as any).getNumberOfPages();
+                    const currentPg = (doc.internal as any).getCurrentPageInfo().pageNumber;
                     doc.setFontSize(7);
                     doc.setTextColor(150, 150, 150);
                     doc.text(`Page ${currentPg} of ${pageCount}`, pw / 2, ph - 6, { align: "center" });

@@ -109,7 +109,7 @@ function BottleneckPage() {
       name: "Delivery",
       health: getStageHealth("Delivery"),
       activeLabel: "Ready Shipments",
-      count: salesOrders.filter(so => so.status === "Ready for Delivery" || so.status === "Partially Delivered").length,
+      count: salesOrders.filter(so => (so.status as string) === "Ready for Delivery" || so.status === "Partially Delivered").length,
       description: "Final logistics & dispatch"
     }
   ];
