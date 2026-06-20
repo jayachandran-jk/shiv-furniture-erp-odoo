@@ -3,7 +3,7 @@ import { useState, useMemo } from "react";
 import { useERP, useCurrentUser, freeToUse } from "@/lib/erp/store";
 import { hasPermission } from "@/lib/erp/permissions";
 import { StatusBadge } from "@/components/erp/StatusBadge";
-import { Button, Input, Select, Field, StatusStepper } from "@/components/erp/ui";
+import { Button, Input, Select, Field, StatusStepper, Sheet } from "@/components/erp/ui";
 import type { SoStatus, SoLine } from "@/lib/erp/types";
 import { format } from "date-fns";
 import { ArrowLeft, FileText, Plus, Trash2, AlertTriangle } from "lucide-react";
@@ -21,7 +21,7 @@ function SalesDetail() {
   const canWrite = hasPermission(user?.role, "sales:write");
   const {
     salesOrders, customers, products, users,
-    confirmSalesOrder, deliverSalesOrder, cancelSalesOrder,
+    confirmSalesOrder, deliverSalesOrder, cancelSalesOrder, updateSalesOrder,
     purchaseOrders, manufacturingOrders,
   } = useERP();
 
@@ -32,6 +32,7 @@ function SalesDetail() {
   // Editable draft fields (only used when status is Draft — managed locally for in-form editing)
   const [editCustomerId, setEditCustomerId] = useState<string | null>(null);
   const [editSalespersonId, setEditSalespersonId] = useState<string | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
 
   if (!so) {
     return (
@@ -116,6 +117,7 @@ function SalesDetail() {
               {isDraft && (
                 <>
                   <Button variant="primary" onClick={handleConfirm}>Confirm</Button>
+                  <Button variant="outline" onClick={() => setEditOpen(true)}>Edit Draft</Button>
                   <Button variant="danger" onClick={handleCancel}>Cancel</Button>
                 </>
               )}
@@ -271,7 +273,14 @@ function SalesDetail() {
             {so.lines.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">
-                  No product lines. This order was created as an empty draft — add lines from the backend or recreate.
+                  <div className="space-y-3">
+                    <p>No product lines. This order was created as an empty draft.</p>
+                    {canWrite && (
+                      <Button variant="primary" onClick={() => setEditOpen(true)}>
+                        <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Customer Requirement
+                      </Button>
+                    )}
+                  </div>
                 </td>
               </tr>
             )}
@@ -306,6 +315,167 @@ function SalesDetail() {
       <div className="text-[11px] text-muted-foreground">
         Created by {so.createdBy} · {format(new Date(so.date), "dd MMM yyyy, HH:mm")}
       </div>
+
+      <Sheet open={editOpen} onClose={() => setEditOpen(false)} title={`Edit Sales Order ${so.number}`} width={680}>
+        <EditSO
+          so={so}
+          customers={customers}
+          products={products}
+          users={users}
+          onClose={() => setEditOpen(false)}
+          onSubmit={async (updated) => {
+            await updateSalesOrder(so.id, updated);
+            setEditOpen(false);
+          }}
+        />
+      </Sheet>
     </div>
+  );
+}
+
+function EditSO({
+  so,
+  customers,
+  products,
+  users,
+  onClose,
+  onSubmit,
+}: {
+  so: any;
+  customers: any[];
+  products: any[];
+  users: any[];
+  onClose: () => void;
+  onSubmit: (updated: { customerId: string; salespersonId?: string; lines: { productId: string; qty: number; unitPrice: number }[] }) => void;
+}) {
+  const [customerId, setCustomerId] = useState(so.customerId);
+  const [salespersonId, setSalespersonId] = useState(so.salespersonId || "");
+  const [lines, setLines] = useState(so.lines.map((l: any) => ({ productId: l.productId, qty: l.qty, unitPrice: l.unitPrice })));
+
+  const total = lines.reduce((a: number, l: any) => a + l.qty * l.unitPrice, 0);
+
+  return (
+    <form
+      onSubmit={e => {
+        e.preventDefault();
+        onSubmit({
+          customerId,
+          salespersonId: salespersonId || undefined,
+          lines,
+        });
+      }}
+      className="space-y-4"
+    >
+      <Field label="Customer">
+        <Select value={customerId} onChange={e => setCustomerId(e.target.value)} required>
+          <option value="">Select customer…</option>
+          {customers.map(c => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Field label="Sales Person">
+        <Select value={salespersonId} onChange={e => setSalespersonId(e.target.value)}>
+          <option value="">Select salesperson…</option>
+          {users.filter(u => u.active).map(u => (
+            <option key={u.id} value={u.id}>
+              {u.name}
+            </option>
+          ))}
+        </Select>
+      </Field>
+
+      <div>
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-[12px] font-medium text-muted-foreground">Customer Requirements (Line items)</span>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => setLines((l: any) => [...l, { productId: products[0]?.id || "", qty: 1, unitPrice: products[0]?.salePrice || 0 }])}
+          >
+            <Plus className="h-3.5 w-3.5 mr-1" /> Add Requirement
+          </Button>
+        </div>
+        <div className="space-y-2">
+          {lines.map((line: any, i: number) => (
+            <div key={i} className="grid grid-cols-12 gap-2 items-end rounded-md border bg-muted/30 p-2.5">
+              <div className="col-span-7">
+                <Field label="Product">
+                  <Select
+                    value={line.productId}
+                    onChange={e => {
+                      const p = products.find((x: any) => x.id === e.target.value);
+                      setLines((ls: any) =>
+                        ls.map((l: any, idx: number) =>
+                          idx === i ? { ...l, productId: e.target.value, unitPrice: p?.salePrice || 0 } : l
+                        )
+                      );
+                    }}
+                    required
+                  >
+                    <option value="">Select product…</option>
+                    {products.map((p: any) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} [{p.sku}]
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              </div>
+              <div className="col-span-2">
+                <Field label="Qty">
+                  <Input
+                    type="number"
+                    min={1}
+                    value={line.qty}
+                    onChange={e =>
+                      setLines((ls: any) =>
+                        ls.map((l: any, idx: number) => (idx === i ? { ...l, qty: +e.target.value } : l))
+                      )
+                    }
+                    required
+                  />
+                </Field>
+              </div>
+              <div className="col-span-2">
+                <Field label="Price ₹">
+                  <Input
+                    type="number"
+                    min={0}
+                    value={line.unitPrice}
+                    onChange={e =>
+                      setLines((ls: any) =>
+                        ls.map((l: any, idx: number) => (idx === i ? { ...l, unitPrice: +e.target.value } : l))
+                      )
+                    }
+                    required
+                  />
+                </Field>
+              </div>
+              <div className="col-span-1 flex h-8 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setLines((ls: any) => ls.filter((_: any, idx: number) => idx !== i))}
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between border-t pt-3">
+        <div className="text-sm text-muted-foreground">Order total</div>
+        <div className="font-serif text-xl font-semibold tabular">₹{total.toLocaleString("en-IN")}</div>
+      </div>
+      <div className="flex justify-end gap-2 border-t pt-3">
+        <Button type="button" onClick={onClose}>Cancel</Button>
+        <Button type="submit" variant="primary">Save Requirements</Button>
+      </div>
+    </form>
   );
 }

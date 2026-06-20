@@ -41,6 +41,7 @@ interface State {
 
   // sales
   createSalesOrder: (so: { customerId: string; salespersonId?: string; lines: Array<{ productId: string; qty: number; unitPrice: number }> }) => Promise<SalesOrder>;
+  updateSalesOrder: (id: string, so: { customerId: string; salespersonId?: string; lines: Array<{ productId: string; qty: number; unitPrice: number }> }) => Promise<SalesOrder>;
   confirmSalesOrder: (id: string) => Promise<void>;
   deliverSalesOrder: (id: string, deliveries: { lineId: string; qty: number }[]) => Promise<void>;
   cancelSalesOrder: (id: string) => Promise<void>;
@@ -429,6 +430,20 @@ export const useERP = create<State>()(
       cancelSalesOrder: async (id) => {
         await apiCall(`/api/sales-orders/${id}/cancel`, "PATCH");
         await get().refreshData();
+      },
+
+      updateSalesOrder: async (id, so) => {
+        const order = await apiCall(`/api/sales-orders/${id}`, "PUT", {
+          customerId: so.customerId,
+          salespersonId: so.salespersonId,
+          lines: so.lines.map(l => ({
+            productId: l.productId,
+            qty: l.qty,
+            unitPrice: l.unitPrice,
+          })),
+        });
+        await get().refreshData();
+        return order;
       },
 
       createPurchaseOrder: async (po) => {

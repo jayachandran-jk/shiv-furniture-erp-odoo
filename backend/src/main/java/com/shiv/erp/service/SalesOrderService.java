@@ -70,6 +70,51 @@ public class SalesOrderService {
     }
 
     @Transactional
+    public SalesOrder updateOrder(String id, SalesOrder updated) {
+        SalesOrder so = salesOrderRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Sales order not found: " + id));
+
+        if (!"Draft".equals(so.getStatus())) {
+            throw new IllegalStateException("Only Draft sales orders can be modified.");
+        }
+
+        String userId = SecurityUtils.getCurrentUserId();
+        String oldVal = String.format("{\"customerId\": \"%s\", \"linesCount\": %d}", so.getCustomerId(), so.getLines() != null ? so.getLines().size() : 0);
+
+        so.setCustomerId(updated.getCustomerId());
+        so.setSalespersonId(updated.getSalespersonId());
+
+        if (so.getLines() == null) {
+            so.setLines(new ArrayList<>());
+        } else {
+            so.getLines().clear();
+        }
+
+        if (updated.getLines() != null) {
+            for (SalesOrderLine line : updated.getLines()) {
+                line.setId("sol-" + UUID.randomUUID().toString().substring(0, 8));
+                line.setSalesOrderId(so.getId());
+                line.setReservedQty(0);
+                line.setDeliveredQty(0);
+                so.getLines().add(line);
+            }
+        }
+
+        SalesOrder saved = salesOrderRepository.save(so);
+
+        auditLogService.logChange(
+                userId,
+                "SalesOrder",
+                saved.getId(),
+                "Updated",
+                oldVal,
+                String.format("{\"customerId\": \"%s\", \"linesCount\": %d}", saved.getCustomerId(), saved.getLines() != null ? saved.getLines().size() : 0)
+        );
+
+        return saved;
+    }
+
+    @Transactional
     public SalesOrder confirmOrder(String id) {
         SalesOrder so = salesOrderRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Sales order not found: " + id));

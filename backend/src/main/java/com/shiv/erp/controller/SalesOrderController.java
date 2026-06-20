@@ -54,6 +54,18 @@ public class SalesOrderController {
         }
     }
 
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','SALES')")
+    public ResponseEntity<?> updateOrder(@PathVariable String id, @RequestBody SalesOrder order) {
+        try {
+            SalesOrder updated = salesOrderService.updateOrder(id, order);
+            return ResponseEntity.ok(updated);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @PatchMapping("/{id}/confirm")
     @PreAuthorize("hasAnyRole('ADMIN','SALES')")
     public ResponseEntity<?> confirmOrder(@PathVariable String id) {
