@@ -41,7 +41,7 @@ public class BoMController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('admin','operations','owner')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS','OWNER','MANUFACTURING')")
     public ResponseEntity<List<BoM>> getAllBoms(
             @RequestParam(required = false) String productId,
             @RequestParam(required = false) Boolean isActive
@@ -64,7 +64,7 @@ public class BoMController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('admin','operations','owner')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS','OWNER','MANUFACTURING')")
     public ResponseEntity<BoM> getBomDetail(@PathVariable String id) {
         BoM bom = bomRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bill of Materials not found"));
@@ -72,28 +72,28 @@ public class BoMController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('admin','operations')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS','MANUFACTURING')")
     public ResponseEntity<BoM> createBom(@RequestBody BoM bom) {
         BoM created = bomService.createBom(bom);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('admin','operations')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS','MANUFACTURING')")
     public ResponseEntity<BoM> updateBom(@PathVariable String id, @RequestBody BoM bom) {
         BoM updated = bomService.updateBom(id, bom);
         return ResponseEntity.ok(updated);
     }
 
     @PostMapping("/{id}/deactivate")
-    @PreAuthorize("hasAnyRole('admin','operations')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS','MANUFACTURING')")
     public ResponseEntity<Void> deactivateBom(@PathVariable String id) {
         bomService.deactivateBom(id);
         return ResponseEntity.ok().build();
     }
 
     @GetMapping("/by-product/{productId}")
-    @PreAuthorize("hasAnyRole('admin','operations','owner')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS','OWNER','MANUFACTURING')")
     public ResponseEntity<?> getBomByProduct(@PathVariable String productId) {
         BoM bom = bomRepository.findByProductIdAndIsActiveTrue(productId).orElse(null);
         if (bom == null) {

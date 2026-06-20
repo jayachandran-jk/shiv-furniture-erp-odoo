@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useERP, useCurrentUser } from "@/lib/erp/store";
-import { canWrite } from "@/components/erp/AppLayout";
+import { hasPermission } from "@/lib/erp/permissions";
 import { StatusBadge } from "@/components/erp/StatusBadge";
 import { Button, StatusStepper } from "@/components/erp/ui";
 import { format } from "date-fns";
@@ -25,7 +25,7 @@ function MoDetail() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const user = useCurrentUser();
-  const writable = canWrite(user?.role);
+  const writable = hasPermission(user?.role, "manufacturing:write");
   const {
     manufacturingOrders, products, workCenters, users, salesOrders,
     confirmManufacturingOrder, setWorkOrderStatus, completeManufacturingOrder, cancelManufacturingOrder, tick,

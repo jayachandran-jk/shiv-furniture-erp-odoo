@@ -22,13 +22,13 @@ public class WorkCenterController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('admin','operations','owner')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS','OWNER','MANUFACTURING')")
     public ResponseEntity<List<WorkCenter>> getWorkCenters() {
         return ResponseEntity.ok(workCenterRepository.findAll());
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('admin','operations')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS','MANUFACTURING')")
     public ResponseEntity<WorkCenter> createWorkCenter(@RequestBody WorkCenter workCenter) {
         if (workCenter.getName() == null || workCenter.getName().trim().isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Work Center name is required");

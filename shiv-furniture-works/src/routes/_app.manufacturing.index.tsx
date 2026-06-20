@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useERP, useCurrentUser } from "@/lib/erp/store";
-import { canWrite } from "@/components/erp/AppLayout";
+import { hasPermission } from "@/lib/erp/permissions";
 import { DataTable, type Column } from "@/components/erp/DataTable";
 import { Button, Field, Input, Select, Sheet } from "@/components/erp/ui";
 import { StatusBadge, EmptyState } from "@/components/erp/StatusBadge";
@@ -17,7 +17,7 @@ export const Route = createFileRoute("/_app/manufacturing/")({
 function MfgPage() {
   const { manufacturingOrders, products, users, createManufacturingOrder } = useERP();
   const user = useCurrentUser();
-  const writable = canWrite(user?.role);
+  const writable = hasPermission(user?.role, "manufacturing:write");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
   const [newOpen, setNewOpen] = useState(false);

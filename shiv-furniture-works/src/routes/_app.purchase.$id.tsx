@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useERP, useCurrentUser } from "@/lib/erp/store";
-import { canWrite } from "@/components/erp/AppLayout";
+import { hasPermission } from "@/lib/erp/permissions";
 import { StatusBadge } from "@/components/erp/StatusBadge";
 import { Button, Input, Modal, StatusStepper, Field, Select, Textarea, Sheet } from "@/components/erp/ui";
 import { format } from "date-fns";
@@ -17,7 +17,7 @@ function PurchaseDetail() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const user = useCurrentUser();
-  const writable = canWrite(user?.role);
+  const writable = hasPermission(user?.role, "purchase:write");
   const { purchaseOrders, vendors, products, salesOrders, bookPurchaseOrder, confirmPurchaseOrder, receivePurchaseOrder, cancelPurchaseOrder, updatePurchaseOrder } = useERP();
   const po = purchaseOrders.find(p => p.id === id);
   const [recvOpen, setRecvOpen] = useState(false);
