@@ -173,6 +173,7 @@ export interface ManufacturingOrder {
   auto?: boolean;
   triggeringSalesOrderId?: string;
   shortageTickets?: ShortageTicket[];
+  updatedAt?: string;
 }
 
 export type LedgerType = "Receipt" | "Delivery" | "Manufacturing In" | "Manufacturing Out" | "Reserve" | "Unreserve" | "Adjustment";
@@ -200,4 +201,23 @@ export interface AuditEntry {
   field?: string;
   oldValue?: string;
   newValue?: string;
+}
+
+export interface Bottleneck {
+  id: string;
+  type: string;
+  severity: "Warning" | "Critical";
+  title: string;
+  recordId: string;
+  recordNumber: string;
+  stage: string;
+  timeDetail: string;
+  impact: string;
+  suggestedAction: string;
+  detectedAt: string;
+  status: "ACTIVE" | "RESOLVED" | "DISMISSED";
+  isDismissed: boolean;
+  dismissedAt?: string;
+  dismissedBy?: string;
+  resolvedAt?: string;
 }

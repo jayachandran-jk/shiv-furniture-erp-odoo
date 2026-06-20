@@ -215,7 +215,33 @@ function SalesDetail() {
             <div className="flex items-start gap-2.5">
               <div className="mt-1 h-2 w-2 rounded-full bg-success shrink-0" />
               <div>
-                <span className="font-semibold">Fulfillment Source: Current Inventory Stock.</span> All ordered items are fully reserved from current inventory stock. No manufacturing or purchasing required.
+                {(() => {
+                  const linkedMOs = manufacturingOrders.filter(m => m.triggeringSalesOrderId === so.id);
+                  const linkedPOs = purchaseOrders.filter(p => p.triggeringSalesOrderId === so.id);
+                  
+                  if (linkedMOs.length > 0) {
+                    const completedMO = linkedMOs.find(m => m.status === "Done") || linkedMOs[0];
+                    const compDate = completedMO.updatedAt ? format(new Date(completedMO.updatedAt), "dd MMM yyyy") : "recently";
+                    return (
+                      <span>
+                        <span className="font-semibold">Fulfillment Source: Completed Manufacturing Order.</span> Fulfilled via production of <Link to="/manufacturing/$id" params={{ id: completedMO.id }} className="font-bold underline hover:text-success/80">{completedMO.number}</Link> (Completed: {compDate}).
+                      </span>
+                    );
+                  } else if (linkedPOs.length > 0) {
+                    const completedPO = linkedPOs.find(p => p.status === "Fully Received") || linkedPOs[0];
+                    return (
+                      <span>
+                        <span className="font-semibold">Fulfillment Source: Completed Purchase Order.</span> Fulfilled via vendor receipt <Link to="/purchase/$id" params={{ id: completedPO.id }} className="font-bold underline hover:text-success/80">{completedPO.number}</Link>.
+                      </span>
+                    );
+                  } else {
+                    return (
+                      <span>
+                        <span className="font-semibold">Fulfillment Source: Existing Stock.</span> All items have been reserved from current inventory stock. No manufacturing or purchasing required.
+                      </span>
+                    );
+                  }
+                })()}
               </div>
             </div>
           )}

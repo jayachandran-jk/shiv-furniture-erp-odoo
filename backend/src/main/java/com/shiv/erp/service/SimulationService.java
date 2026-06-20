@@ -16,6 +16,7 @@ public class SimulationService {
     private final SalesOrderRepository salesOrderRepository;
     private final SalesOrderService salesOrderService;
     private final ProductRepository productRepository;
+    private final BottleneckService bottleneckService;
 
     public SimulationService(PurchaseOrderRepository purchaseOrderRepository,
                              PurchaseOrderService purchaseOrderService,
@@ -23,7 +24,8 @@ public class SimulationService {
                              ManufacturingOrderService manufacturingOrderService,
                              SalesOrderRepository salesOrderRepository,
                              SalesOrderService salesOrderService,
-                             ProductRepository productRepository) {
+                             ProductRepository productRepository,
+                             BottleneckService bottleneckService) {
         this.purchaseOrderRepository = purchaseOrderRepository;
         this.purchaseOrderService = purchaseOrderService;
         this.manufacturingOrderRepository = manufacturingOrderRepository;
@@ -31,6 +33,7 @@ public class SimulationService {
         this.salesOrderRepository = salesOrderRepository;
         this.salesOrderService = salesOrderService;
         this.productRepository = productRepository;
+        this.bottleneckService = bottleneckService;
     }
 
     @Scheduled(fixedDelay = 5000)
@@ -39,6 +42,7 @@ public class SimulationService {
             processPurchaseOrdersSimulation();
             processManufacturingOrdersSimulation();
             processSalesOrdersSimulation();
+            bottleneckService.scanBottlenecks();
         } catch (Exception e) {
             // Safety wrapper
         }
@@ -47,7 +51,16 @@ public class SimulationService {
     private void processPurchaseOrdersSimulation() {
         List<PurchaseOrder> orders = purchaseOrderRepository.findAll();
         for (PurchaseOrder po : orders) {
+            if (po.getUpdatedAt() != null && po.getUpdatedAt().isAfter(java.time.LocalDateTime.now().minusSeconds(15))) {
+                continue;
+            }
             if ("Draft".equals(po.getStatus())) {
+                try {
+                    purchaseOrderService.bookOrder(po.getId());
+                } catch (Exception e) {
+                    // Ignore
+                }
+            } else if ("Booked".equals(po.getStatus())) {
                 try {
                     purchaseOrderService.confirmOrder(po.getId());
                 } catch (Exception e) {
@@ -77,6 +90,9 @@ public class SimulationService {
     private void processManufacturingOrdersSimulation() {
         List<ManufacturingOrder> orders = manufacturingOrderRepository.findAll();
         for (ManufacturingOrder mo : orders) {
+            if (mo.getUpdatedAt() != null && mo.getUpdatedAt().isAfter(java.time.LocalDateTime.now().minusSeconds(15))) {
+                continue;
+            }
             if ("Confirmed".equals(mo.getStatus()) || "In Progress".equals(mo.getStatus())) {
                 boolean allWorkOrdersCompleted = true;
                 boolean anyWorkOrderRunning = false;
@@ -124,6 +140,9 @@ public class SimulationService {
     private void processSalesOrdersSimulation() {
         List<SalesOrder> orders = salesOrderRepository.findAll();
         for (SalesOrder so : orders) {
+            if (so.getUpdatedAt() != null && so.getUpdatedAt().isAfter(java.time.LocalDateTime.now().minusSeconds(15))) {
+                continue;
+            }
             if ("Confirmed".equals(so.getStatus()) || "Partially Delivered".equals(so.getStatus())) {
                 Map<String, Integer> deliveries = new HashMap<>();
                 boolean hasDeliveries = false;

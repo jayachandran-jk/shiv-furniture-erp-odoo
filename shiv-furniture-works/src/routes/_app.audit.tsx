@@ -6,8 +6,6 @@ import { format } from "date-fns";
 import { Filter, RotateCcw, ChevronLeft, ChevronRight, Calendar, RefreshCw, Wifi, Download } from "lucide-react";
 import { useEffect, useRef } from "react";
 import type { AuditEntry } from "@/lib/erp/types";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 
 export const Route = createFileRoute("/_app/audit")({
   head: () => ({ meta: [{ title: "Audit Logs — Shiv Furniture Works" }] }),
@@ -416,6 +414,9 @@ function AuditPage() {
             // small delay so the button text updates
             await new Promise(r => setTimeout(r, 50));
             try {
+              const { default: jsPDF } = await import("jspdf");
+              const { default: autoTable } = await import("jspdf-autotable");
+
               const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
               const pw = doc.internal.pageSize.getWidth();
               const ph = doc.internal.pageSize.getHeight();
@@ -486,39 +487,78 @@ function AuditPage() {
                 a.newValue || "—",
               ]);
 
-              autoTable(doc, {
-                startY: y + 20,
-                head: [["Date & Time", "User", "Module", "Record Type", "Record ID", "Action", "Field Changed", "Old Value", "New Value"]],
-                body: tableRows,
-                theme: "grid",
-                styles: { fontSize: 7, cellPadding: 2, textColor: [43, 38, 34], lineColor: [220, 220, 220], lineWidth: 0.2 },
-                headStyles: { fillColor: accent, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7 },
-                alternateRowStyles: { fillColor: [250, 248, 245] },
-                columnStyles: {
-                  0: { cellWidth: 38 },
-                  4: { cellWidth: 24, fontSize: 6 },
-                  5: { cellWidth: 22 },
-                  7: { cellWidth: 30 },
-                  8: { cellWidth: 30 },
-                },
-                didParseCell: (data: any) => {
-                  if (data.section === "body" && data.column.index === 5) {
-                    const action = String(data.cell.raw).toLowerCase();
-                    if (action.includes("creat")) data.cell.styles.textColor = [22, 163, 74];
-                    else if (action.includes("updat") || action.includes("confirm") || action.includes("deliver") || action.includes("receiv")) data.cell.styles.textColor = [217, 119, 6];
-                    else if (action.includes("delet") || action.includes("cancel")) data.cell.styles.textColor = [220, 38, 38];
-                  }
-                },
-                margin: { left: 14, right: 14 },
-                didDrawPage: (data: any) => {
-                  const pageCount = (doc as any).internal.getNumberOfPages();
-                  const currentPg = (doc as any).internal.getCurrentPageInfo().pageNumber;
-                  doc.setFontSize(7);
-                  doc.setTextColor(150, 150, 150);
-                  doc.text(`Page ${currentPg} of ${pageCount}`, pw / 2, ph - 6, { align: "center" });
-                  doc.text("Shiv Furniture Works", pw - 14, ph - 6, { align: "right" });
-                },
-              });
+              const renderTable = typeof autoTable === "function" ? autoTable : (autoTable as any).default;
+              if (typeof renderTable === "function") {
+                renderTable(doc, {
+                  startY: y + 20,
+                  head: [["Date & Time", "User", "Module", "Record Type", "Record ID", "Action", "Field Changed", "Old Value", "New Value"]],
+                  body: tableRows,
+                  theme: "grid",
+                  styles: { fontSize: 7, cellPadding: 2, textColor: [43, 38, 34], lineColor: [220, 220, 220], lineWidth: 0.2 },
+                  headStyles: { fillColor: accent, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7 },
+                  alternateRowStyles: { fillColor: [250, 248, 245] },
+                  columnStyles: {
+                    0: { cellWidth: 38 },
+                    4: { cellWidth: 24, fontSize: 6 },
+                    5: { cellWidth: 22 },
+                    7: { cellWidth: 30 },
+                    8: { cellWidth: 30 },
+                  },
+                  didParseCell: (data: any) => {
+                    if (data.section === "body" && data.column.index === 5) {
+                      const action = String(data.cell.raw).toLowerCase();
+                      if (action.includes("creat")) data.cell.styles.textColor = [22, 163, 74];
+                      else if (action.includes("updat") || action.includes("confirm") || action.includes("deliver") || action.includes("receiv")) data.cell.styles.textColor = [217, 119, 6];
+                      else if (action.includes("delet") || action.includes("cancel")) data.cell.styles.textColor = [220, 38, 38];
+                    }
+                  },
+                  margin: { left: 14, right: 14 },
+                  didDrawPage: (data: any) => {
+                    const pageCount = doc.internal.getNumberOfPages();
+                    const currentPg = doc.internal.getCurrentPageInfo().pageNumber;
+                    doc.setFontSize(7);
+                    doc.setTextColor(150, 150, 150);
+                    doc.text(`Page ${currentPg} of ${pageCount}`, pw / 2, ph - 6, { align: "center" });
+                    doc.text("Shiv Furniture Works", pw - 14, ph - 6, { align: "right" });
+                  },
+                });
+              } else if (typeof (doc as any).autoTable === "function") {
+                (doc as any).autoTable({
+                  startY: y + 20,
+                  head: [["Date & Time", "User", "Module", "Record Type", "Record ID", "Action", "Field Changed", "Old Value", "New Value"]],
+                  body: tableRows,
+                  theme: "grid",
+                  styles: { fontSize: 7, cellPadding: 2, textColor: [43, 38, 34], lineColor: [220, 220, 220], lineWidth: 0.2 },
+                  headStyles: { fillColor: accent, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7 },
+                  alternateRowStyles: { fillColor: [250, 248, 245] },
+                  columnStyles: {
+                    0: { cellWidth: 38 },
+                    4: { cellWidth: 24, fontSize: 6 },
+                    5: { cellWidth: 22 },
+                    7: { cellWidth: 30 },
+                    8: { cellWidth: 30 },
+                  },
+                  didParseCell: (data: any) => {
+                    if (data.section === "body" && data.column.index === 5) {
+                      const action = String(data.cell.raw).toLowerCase();
+                      if (action.includes("creat")) data.cell.styles.textColor = [22, 163, 74];
+                      else if (action.includes("updat") || action.includes("confirm") || action.includes("deliver") || action.includes("receiv")) data.cell.styles.textColor = [217, 119, 6];
+                      else if (action.includes("delet") || action.includes("cancel")) data.cell.styles.textColor = [220, 38, 38];
+                    }
+                  },
+                  margin: { left: 14, right: 14 },
+                  didDrawPage: (data: any) => {
+                    const pageCount = doc.internal.getNumberOfPages();
+                    const currentPg = doc.internal.getCurrentPageInfo().pageNumber;
+                    doc.setFontSize(7);
+                    doc.setTextColor(150, 150, 150);
+                    doc.text(`Page ${currentPg} of ${pageCount}`, pw / 2, ph - 6, { align: "center" });
+                    doc.text("Shiv Furniture Works", pw - 14, ph - 6, { align: "right" });
+                  },
+                });
+              } else {
+                throw new Error("Could not find autoTable function on import or doc prototype");
+              }
 
               const filename = `Audit_Log_ShivFurniture_${format(now, "ddMMMyyyy")}.pdf`;
               doc.save(filename);
@@ -535,6 +575,7 @@ function AuditPage() {
           <Download className="h-3.5 w-3.5" />
           {isExporting ? "Generating…" : "Export PDF"}
         </button>
+
       </div>
 
       {/* ── SECTION 3: Audit Log Table ── */}

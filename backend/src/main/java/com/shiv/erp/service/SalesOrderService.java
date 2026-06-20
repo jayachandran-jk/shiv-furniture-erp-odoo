@@ -21,6 +21,7 @@ public class SalesOrderService {
     private final ManufacturingOrderRepository manufacturingOrderRepository;
     private final BoMRepository bomRepository;
     private final VendorRepository vendorRepository;
+    private final NotificationService notificationService;
 
     public SalesOrderService(SalesOrderRepository salesOrderRepository,
                              ProductRepository productRepository,
@@ -30,7 +31,8 @@ public class SalesOrderService {
                              PurchaseOrderRepository purchaseOrderRepository,
                              ManufacturingOrderRepository manufacturingOrderRepository,
                              BoMRepository bomRepository,
-                             VendorRepository vendorRepository) {
+                             VendorRepository vendorRepository,
+                             NotificationService notificationService) {
         this.salesOrderRepository = salesOrderRepository;
         this.productRepository = productRepository;
         this.stockLedgerService = stockLedgerService;
@@ -40,6 +42,7 @@ public class SalesOrderService {
         this.manufacturingOrderRepository = manufacturingOrderRepository;
         this.bomRepository = bomRepository;
         this.vendorRepository = vendorRepository;
+        this.notificationService = notificationService;
     }
 
     @Transactional
@@ -174,6 +177,15 @@ public class SalesOrderService {
                 line.setAutoCreatedOrderNumber(null);
             }
             so.setStatus("Partially Delivered");
+
+            notificationService.notifyUserOrRoles(
+                so.getSalespersonId(),
+                List.of("sales", "admin"),
+                "Sales Order Ready: " + so.getNumber(),
+                "All items are in stock. Order is Ready for Delivery.",
+                "SALES_ORDER",
+                so.getId()
+            );
         } else {
             // Shortage exists -> run normal fallback logic, status is Confirmed
             for (SalesOrderLine line : so.getLines()) {
@@ -376,8 +388,8 @@ public class SalesOrderService {
         SalesOrder so = salesOrderRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Sales order not found: " + id));
 
-        if (!"Confirmed".equals(so.getStatus()) && !"Partially Delivered".equals(so.getStatus())) {
-            throw new IllegalStateException("Deliveries can only be recorded for Confirmed or Partially Delivered orders.");
+        if (!"Partially Delivered".equals(so.getStatus())) {
+            throw new IllegalStateException("Deliveries can only be recorded for Ready for Delivery (Partially Delivered) orders.");
         }
 
         String userId = SecurityUtils.getCurrentUserId();

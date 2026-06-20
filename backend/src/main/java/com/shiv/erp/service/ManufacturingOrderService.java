@@ -437,6 +437,69 @@ public class ManufacturingOrderService {
                             saved.getProductId()
                     );
                 }
+
+                // Automatically reserve stock for triggering sales order line
+                boolean soStateChanged = false;
+                if (so.getLines() != null) {
+                    for (SalesOrderLine line : so.getLines()) {
+                        if (line.getProductId().equals(saved.getProductId())) {
+                            int remainingShortage = line.getShortageQty() != null ? line.getShortageQty() : 0;
+                            // If shortageQty is null/transient or not set, default to (ordered - reserved)
+                            if (remainingShortage == 0) {
+                                remainingShortage = Math.max(0, line.getQty() - (line.getReservedQty() != null ? line.getReservedQty() : 0));
+                            }
+                            if (remainingShortage > 0) {
+                                int qtyToReserve = Math.min(remainingShortage, saved.getQty());
+                                
+                                Product product = productRepository.findByIdForUpdate(saved.getProductId()).orElse(null);
+                                if (product != null) {
+                                    product.setReservedQty((product.getReservedQty() != null ? product.getReservedQty() : 0) + qtyToReserve);
+                                    productRepository.save(product);
+                                    
+                                    stockLedgerService.recordMovement(
+                                        product.getId(),
+                                        "SALES_RESERVE",
+                                        qtyToReserve,
+                                        "SO",
+                                        so.getId(),
+                                        "Reserve stock from completed Manufacturing Order"
+                                    );
+                                    
+                                    line.setReservedQty((line.getReservedQty() != null ? line.getReservedQty() : 0) + qtyToReserve);
+                                    line.setShortageQty(remainingShortage - qtyToReserve);
+                                    soStateChanged = true;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (soStateChanged) {
+                    boolean allFullyReserved = true;
+                    if (so.getLines() != null) {
+                        for (SalesOrderLine line : so.getLines()) {
+                            if (line.getShortageQty() > 0 || line.getReservedQty() < line.getQty()) {
+                                allFullyReserved = false;
+                                break;
+                            }
+                        }
+                    } else {
+                        allFullyReserved = false;
+                    }
+                    
+                    if (allFullyReserved) {
+                        so.setStatus("Partially Delivered");
+                        notificationService.notifyUserOrRoles(
+                            so.getSalespersonId(),
+                            List.of("sales", "admin"),
+                            "Sales Order Ready: " + so.getNumber(),
+                            String.format("All items are now in stock for Sales Order %s. Order is Ready for Delivery.", so.getNumber()),
+                            "SALES_ORDER",
+                            so.getId()
+                        );
+                    }
+                    salesOrderRepository.save(so);
+                }
             });
         }
 

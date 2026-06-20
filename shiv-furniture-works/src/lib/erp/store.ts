@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware";
 import type {
   AuditEntry, BoM, Customer, LedgerEntry, ManufacturingOrder, Product,
   PurchaseOrder, SalesOrder, User, Vendor, WorkCenter, WoStatus, LedgerType,
+  Bottleneck,
 } from "./types";
 
 interface State {
@@ -18,6 +19,7 @@ interface State {
   manufacturingOrders: ManufacturingOrder[];
   ledger: LedgerEntry[];
   audit: AuditEntry[];
+  bottlenecks: Bottleneck[];
   // session
   currentUserId: string | null;
   theme: "light" | "dark";
@@ -70,6 +72,8 @@ interface State {
   deactivateBom: (id: string) => Promise<void>;
   createWorkCenter: (wc: { name: string; description?: string; capacityPerDay?: number }) => Promise<WorkCenter>;
   createCustomer: (c: { name: string; contact?: string; address?: string }) => Promise<Customer>;
+  dismissBottleneck: (id: string) => Promise<void>;
+  forceScanBottlenecks: () => Promise<void>;
   refreshData: () => Promise<void>;
 }
 
@@ -140,6 +144,7 @@ function mapManufacturingOrder(mo: any): ManufacturingOrder {
       createdAt: t.createdAt,
       updatedAt: t.updatedAt,
     })),
+    updatedAt: mo.updatedAt,
   };
 }
 
@@ -284,6 +289,7 @@ export const useERP = create<State>()(
       manufacturingOrders: [],
       ledger: [],
       audit: [],
+      bottlenecks: [],
       currentUserId: null,
       theme: "light",
       sidebarCollapsed: false,
@@ -321,6 +327,7 @@ export const useERP = create<State>()(
           manufacturingOrders: [],
           ledger: [],
           audit: [],
+          bottlenecks: [],
           searchQuery: "",
         });
       },
@@ -344,7 +351,7 @@ export const useERP = create<State>()(
           // Fetch all data, gracefully handling 403 from RBAC restrictions
           const safeCall = (path: string) => apiCall(path).catch(() => []);
 
-          const [users, vendors, customers, workCenters, products, boms, salesOrders, purchaseOrders, manufacturingOrders, ledger, audit] = await Promise.all([
+          const [users, vendors, customers, workCenters, products, boms, salesOrders, purchaseOrders, manufacturingOrders, ledger, audit, bottlenecks] = await Promise.all([
             apiCall("/api/users"),
             safeCall("/api/vendors"),
             safeCall("/api/customers"),
@@ -356,6 +363,7 @@ export const useERP = create<State>()(
             safeCall("/api/manufacturing"),
             safeCall("/api/inventory"),
             safeCall("/api/audit-logs"),
+            safeCall("/api/bottlenecks"),
           ]);
 
           const mappedUsers = (users || []).map((u: any) => ({
@@ -444,6 +452,7 @@ export const useERP = create<State>()(
             manufacturingOrders: mappedManufacturingOrders,
             ledger: mappedLedger,
             audit: mappedAudit,
+            bottlenecks: bottlenecks || [],
           });
         } catch (err: any) {
           console.error("Error refreshing data:", err);
@@ -653,6 +662,16 @@ export const useERP = create<State>()(
         const res = await apiCall("/api/work-centers", "POST", wc);
         await get().refreshData();
         return res;
+      },
+
+      dismissBottleneck: async (id) => {
+        await apiCall(`/api/bottlenecks/${id}/dismiss`, "POST");
+        await get().refreshData();
+      },
+
+      forceScanBottlenecks: async () => {
+        await apiCall("/api/bottlenecks/scan", "POST");
+        await get().refreshData();
       },
     }),
     {

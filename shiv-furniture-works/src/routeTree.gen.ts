@@ -19,6 +19,7 @@ import { Route as AppProductsRouteImport } from './routes/_app.products'
 import { Route as AppManufacturingRouteImport } from './routes/_app.manufacturing'
 import { Route as AppInventoryRouteImport } from './routes/_app.inventory'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
+import { Route as AppBottleneckRouteImport } from './routes/_app.bottleneck'
 import { Route as AppBomRouteImport } from './routes/_app.bom'
 import { Route as AppAutomationRouteImport } from './routes/_app.automation'
 import { Route as AppAuditRouteImport } from './routes/_app.audit'
@@ -79,6 +80,11 @@ const AppInventoryRoute = AppInventoryRouteImport.update({
 const AppDashboardRoute = AppDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppBottleneckRoute = AppBottleneckRouteImport.update({
+  id: '/bottleneck',
+  path: '/bottleneck',
   getParentRoute: () => AppRoute,
 } as any)
 const AppBomRoute = AppBomRouteImport.update({
@@ -148,6 +154,7 @@ export interface FileRoutesByFullPath {
   '/audit': typeof AppAuditRoute
   '/automation': typeof AppAutomationRoute
   '/bom': typeof AppBomRouteWithChildren
+  '/bottleneck': typeof AppBottleneckRoute
   '/dashboard': typeof AppDashboardRoute
   '/inventory': typeof AppInventoryRoute
   '/manufacturing': typeof AppManufacturingRouteWithChildren
@@ -170,6 +177,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/audit': typeof AppAuditRoute
   '/automation': typeof AppAutomationRoute
+  '/bottleneck': typeof AppBottleneckRoute
   '/dashboard': typeof AppDashboardRoute
   '/inventory': typeof AppInventoryRoute
   '/products': typeof AppProductsRoute
@@ -192,6 +200,7 @@ export interface FileRoutesById {
   '/_app/audit': typeof AppAuditRoute
   '/_app/automation': typeof AppAutomationRoute
   '/_app/bom': typeof AppBomRouteWithChildren
+  '/_app/bottleneck': typeof AppBottleneckRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/inventory': typeof AppInventoryRoute
   '/_app/manufacturing': typeof AppManufacturingRouteWithChildren
@@ -217,6 +226,7 @@ export interface FileRouteTypes {
     | '/audit'
     | '/automation'
     | '/bom'
+    | '/bottleneck'
     | '/dashboard'
     | '/inventory'
     | '/manufacturing'
@@ -239,6 +249,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/audit'
     | '/automation'
+    | '/bottleneck'
     | '/dashboard'
     | '/inventory'
     | '/products'
@@ -260,6 +271,7 @@ export interface FileRouteTypes {
     | '/_app/audit'
     | '/_app/automation'
     | '/_app/bom'
+    | '/_app/bottleneck'
     | '/_app/dashboard'
     | '/_app/inventory'
     | '/_app/manufacturing'
@@ -354,6 +366,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof AppDashboardRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/bottleneck': {
+      id: '/_app/bottleneck'
+      path: '/bottleneck'
+      fullPath: '/bottleneck'
+      preLoaderRoute: typeof AppBottleneckRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/bom': {
@@ -503,6 +522,7 @@ interface AppRouteChildren {
   AppAuditRoute: typeof AppAuditRoute
   AppAutomationRoute: typeof AppAutomationRoute
   AppBomRoute: typeof AppBomRouteWithChildren
+  AppBottleneckRoute: typeof AppBottleneckRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppInventoryRoute: typeof AppInventoryRoute
   AppManufacturingRoute: typeof AppManufacturingRouteWithChildren
@@ -516,6 +536,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAuditRoute: AppAuditRoute,
   AppAutomationRoute: AppAutomationRoute,
   AppBomRoute: AppBomRouteWithChildren,
+  AppBottleneckRoute: AppBottleneckRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppInventoryRoute: AppInventoryRoute,
   AppManufacturingRoute: AppManufacturingRouteWithChildren,

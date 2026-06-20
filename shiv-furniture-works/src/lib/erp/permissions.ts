@@ -100,6 +100,7 @@ const ALL_NAV: NavItem[] = [
   { to: "/sales",     label: "Sales",     icon: "ShoppingCart",     readPerm: "sales:read" },
   { to: "/purchase",  label: "Purchase",  icon: "Truck",           readPerm: "purchase:read" },
   { to: "/manufacturing", label: "Manufacturing", icon: "Factory", readPerm: "manufacturing:read" },
+  { to: "/bottleneck", label: "Bottleneck Detector", icon: "AlertTriangle", readPerm: "dashboard:read" },
   { to: "/bom",       label: "Bill of Materials", icon: "ClipboardList", readPerm: "bom:read" },
   { to: "/audit",     label: "Audit Log", icon: "FileText",        readPerm: "audit:read" },
   { to: "/automation", label: "Automation", icon: "Zap",           readPerm: "automation:read" },

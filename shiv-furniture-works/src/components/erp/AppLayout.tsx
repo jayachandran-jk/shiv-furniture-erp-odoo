@@ -2,7 +2,7 @@ import { Outlet, Link, useRouterState, useNavigate } from "@tanstack/react-route
 import {
   LayoutDashboard, Package, Warehouse, ShoppingCart, ClipboardList,
   Factory, Layers, ScrollText, Settings as SettingsIcon, ChevronLeft, ChevronRight,
-  Search, Sun, Moon, LogOut, Truck, Bell, CheckCheck, Zap
+  Search, Sun, Moon, LogOut, Truck, Bell, CheckCheck, Zap, AlertTriangle
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useERP, useCurrentUser, useHasHydrated } from "@/lib/erp/store";
@@ -14,6 +14,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   LayoutDashboard, Package, Warehouse, ShoppingCart, ClipboardList,
   Factory, Layers, ScrollText, Settings: SettingsIcon, Truck, Zap,
   FileText: ScrollText,
+  AlertTriangle,
 };
 
 const ROLE_LABEL: Record<string, string> = {
@@ -60,13 +61,15 @@ export function AppLayout() {
   const user = useCurrentUser();
   const hydrated = useHasHydrated();
   const navigate = useNavigate();
-  const { currentUserId, theme, setTheme, sidebarCollapsed, toggleSidebar, logout, bumpTick, refreshData, searchQuery, setSearchQuery } = useERP();
+  const { currentUserId, theme, setTheme, sidebarCollapsed, toggleSidebar, logout, bumpTick, refreshData, searchQuery, setSearchQuery, bottlenecks } = useERP();
   const pathname = useRouterState({ select: s => s.location.pathname });
   const searchRef = useRef<HTMLInputElement>(null);
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const notificationsDropdownRef = useRef<HTMLDivElement>(null);
+
+  const activeCount = (bottlenecks || []).filter(b => b.status === "ACTIVE").length;
 
   const fetchNotifications = async () => {
     try {
@@ -247,7 +250,7 @@ export function AppLayout() {
                 key={item.to}
                 to={item.to}
                 className={cn(
-                  "mx-2 flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                  "mx-2 relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
                   active
                     ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
                     : "text-sidebar-foreground hover:bg-sidebar-accent/60"
@@ -255,6 +258,14 @@ export function AppLayout() {
               >
                 <Icon className="h-4 w-4 shrink-0" />
                 {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
+                {!sidebarCollapsed && item.to === "/bottleneck" && activeCount > 0 && (
+                  <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-semibold text-white">
+                    {activeCount}
+                  </span>
+                )}
+                {sidebarCollapsed && item.to === "/bottleneck" && activeCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 flex h-2 w-2 rounded-full bg-red-500" />
+                )}
               </Link>
             );
           })}

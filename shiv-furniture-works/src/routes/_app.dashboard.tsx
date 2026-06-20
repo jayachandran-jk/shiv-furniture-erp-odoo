@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useERP, freeToUse } from "@/lib/erp/store";
-import { ShoppingCart, Truck, Factory, AlertTriangle, ClipboardList, IndianRupee, TrendingUp, RefreshCw } from "lucide-react";
+import { ShoppingCart, Truck, Factory, AlertTriangle, ClipboardList, IndianRupee, TrendingUp, RefreshCw, Clock } from "lucide-react";
 import { Section } from "@/components/erp/ui";
 import { formatDistanceToNow } from "date-fns";
 import { useState, useEffect } from "react";
@@ -29,7 +29,7 @@ export const Route = createFileRoute("/_app/dashboard")({
 });
 
 function Dashboard() {
-  const { salesOrders, purchaseOrders, manufacturingOrders, products, audit, users, workCenters, refreshData } = useERP();
+  const { salesOrders, purchaseOrders, manufacturingOrders, products, audit, users, workCenters, refreshData, bottlenecks } = useERP();
 
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -62,6 +62,7 @@ function Dashboard() {
   const openMO = manufacturingOrders.filter(s => s.status !== "Done" && s.status !== "Cancelled");
   const openPO = purchaseOrders.filter(s => s.status !== "Fully Received" && s.status !== "Cancelled");
   const lowStock = products.filter(p => p.isActive !== false && p.reorderThreshold > 0 && p.onHand <= p.reorderThreshold);
+  const activeBns = (bottlenecks || []).filter(b => b.status === "ACTIVE");
 
   // Revenue: sum of Confirmed + Partially Delivered + Fully Delivered SO line totals
   const revenue = salesOrders
@@ -507,34 +508,57 @@ function Dashboard() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-3">
-          <Section title="Bottleneck detector">
-            {!hasActiveMO ? (
-              <div className="rounded-lg border bg-card p-5 flex flex-col items-center justify-center min-h-[140px] text-center">
-                <span className="text-xl mb-1">⚪</span>
-                <span className="text-sm font-semibold text-muted-foreground">No active manufacturing order</span>
-              </div>
-            ) : !bottleneckWo ? (
-              <div className="rounded-lg border bg-card p-5 flex flex-col items-center justify-center min-h-[140px] text-center">
+          <Section
+            title="Bottleneck detector"
+            actions={
+              activeBns.length > 0 && (
+                <Link to="/bottleneck" className="text-xs font-semibold text-accent hover:underline flex items-center gap-0.5">
+                  View all ({activeBns.length}) &rarr;
+                </Link>
+              )
+            }
+          >
+            {activeBns.length === 0 ? (
+              <div className="rounded-lg border bg-card p-5 flex flex-col items-center justify-center min-h-[150px] text-center">
                 <span className="text-xl mb-1">🟢</span>
-                <span className="text-sm font-semibold text-success">No Bottleneck</span>
-                <span className="text-xs text-muted-foreground mt-1">All work orders are within planned time</span>
+                <span className="text-sm font-semibold text-[#10B981]">No active bottlenecks</span>
+                <span className="text-xs text-muted-foreground mt-1">All pipelines are operational and on track.</span>
               </div>
             ) : (
-              <div className="rounded-lg border bg-card p-5 space-y-4">
-                <div className="flex items-center gap-2 text-sm font-semibold text-[#DC2626]">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#DC2626] animate-ping" />
-                  <span>🔴 Bottleneck Detected</span>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-baseline justify-between gap-2 flex-wrap">
-                    <span className="text-sm font-semibold text-foreground">"{bottleneckWo.name}"</span>
-                    <span className="text-xs font-semibold text-[#DC2626]">{formatSeconds(maxOvertime)} over planned</span>
-                  </div>
-                  <div className="text-[11px] text-muted-foreground space-y-1">
-                    <div>Work Center: <span className="font-medium text-foreground">{bottleneckWo.workCenter}</span></div>
-                    <div>Impact: <span className="text-[#C2623F] font-medium">Delays all downstream tasks</span></div>
-                  </div>
-                </div>
+              <div className="grid gap-3">
+                {activeBns.slice(0, 3).map(bn => {
+                  const isCritical = bn.severity === "Critical";
+                  return (
+                    <div
+                      key={bn.id}
+                      className={`rounded-lg border bg-card p-3.5 flex flex-col gap-1.5 ${
+                        isCritical ? "border-l-4 border-l-red-500" : "border-l-4 border-l-amber-500"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
+                            isCritical
+                              ? "bg-red-500/10 text-red-600 dark:text-red-400"
+                              : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                          }`}
+                        >
+                          {bn.severity}
+                        </span>
+                        <span className="rounded-md bg-muted px-1.5 py-0.5 text-[9px] font-semibold uppercase text-muted-foreground">
+                          {bn.stage}
+                        </span>
+                      </div>
+                      <div className="text-xs font-semibold text-foreground leading-snug">{bn.title}</div>
+                      <div className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+                        <Clock className="h-3 w-3" />
+                        <span>{bn.timeDetail}</span>
+                        <span>&middot;</span>
+                        <span>{bn.recordNumber}</span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </Section>

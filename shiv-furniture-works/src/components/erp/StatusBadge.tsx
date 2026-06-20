@@ -16,6 +16,8 @@ const MAP: Record<string, string> = {
   "Active": "bg-success/15 text-success border-success/30",
   "Inactive": "bg-muted text-muted-foreground border-border",
   "Out of Stock": "bg-destructive/10 text-destructive border-destructive/30 font-semibold",
+  "In Stock": "bg-success/15 text-success border-success/30 font-semibold",
+  "Committed": "bg-warning/15 text-warning border-warning/30 font-semibold",
   "Partially Reserved": "bg-warning/15 text-warning border-warning/30 font-semibold",
   "Low Stock": "bg-warning/15 text-warning border-warning/30 font-semibold",
   "OK": "bg-success/15 text-success border-success/30 font-semibold",

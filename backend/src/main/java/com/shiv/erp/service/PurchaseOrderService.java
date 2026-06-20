@@ -6,6 +6,8 @@ import com.shiv.erp.model.Product;
 import com.shiv.erp.model.PurchaseOrder;
 import com.shiv.erp.model.PurchaseOrderLine;
 import com.shiv.erp.model.ShortageTicket;
+import com.shiv.erp.model.SalesOrder;
+import com.shiv.erp.model.SalesOrderLine;
 import com.shiv.erp.repository.ManufacturingOrderRepository;
 import com.shiv.erp.repository.ProductRepository;
 import com.shiv.erp.repository.PurchaseOrderRepository;
@@ -303,6 +305,76 @@ public class PurchaseOrderService {
                             "SALES_ORDER",
                             so.getId()
                     );
+                }
+
+                // Automatically reserve stock for triggering sales order lines
+                boolean soStateChanged = false;
+                if (so.getLines() != null) {
+                    for (SalesOrderLine solLine : so.getLines()) {
+                        // Find the matching received line from this PO by product ID
+                        for (PurchaseOrderLine poLine : saved.getLines()) {
+                            if (poLine.getProductId().equals(solLine.getProductId())) {
+                                // Calculate how much we received in this transaction
+                                int toReceive = receipts.getOrDefault(poLine.getId(), 0);
+                                if (toReceive > 0) {
+                                    int remainingShortage = solLine.getShortageQty() != null ? solLine.getShortageQty() : 0;
+                                    // If shortageQty is null/transient or not set, default to (ordered - reserved)
+                                    if (remainingShortage == 0) {
+                                        remainingShortage = Math.max(0, solLine.getQty() - (solLine.getReservedQty() != null ? solLine.getReservedQty() : 0));
+                                    }
+                                    if (remainingShortage > 0) {
+                                        int qtyToReserve = Math.min(remainingShortage, toReceive);
+                                        
+                                        Product product = productRepository.findByIdForUpdate(solLine.getProductId()).orElse(null);
+                                        if (product != null) {
+                                            product.setReservedQty((product.getReservedQty() != null ? product.getReservedQty() : 0) + qtyToReserve);
+                                            productRepository.save(product);
+                                            
+                                            stockLedgerService.recordMovement(
+                                                product.getId(),
+                                                "SALES_RESERVE",
+                                                qtyToReserve,
+                                                "SO",
+                                                so.getId(),
+                                                "Reserve stock from received Purchase Order"
+                                            );
+                                            
+                                            solLine.setReservedQty((solLine.getReservedQty() != null ? solLine.getReservedQty() : 0) + qtyToReserve);
+                                            solLine.setShortageQty(remainingShortage - qtyToReserve);
+                                            soStateChanged = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (soStateChanged) {
+                    boolean allFullyReserved = true;
+                    if (so.getLines() != null) {
+                        for (SalesOrderLine solLine : so.getLines()) {
+                            if (solLine.getShortageQty() > 0 || solLine.getReservedQty() < solLine.getQty()) {
+                                allFullyReserved = false;
+                                break;
+                            }
+                        }
+                    } else {
+                        allFullyReserved = false;
+                    }
+                    
+                    if (allFullyReserved) {
+                        so.setStatus("Partially Delivered");
+                        notificationService.notifyUserOrRoles(
+                            so.getSalespersonId(),
+                            List.of("sales", "admin"),
+                            "Sales Order Ready: " + so.getNumber(),
+                            String.format("All items are now in stock for Sales Order %s. Order is Ready for Delivery.", so.getNumber()),
+                            "SALES_ORDER",
+                            so.getId()
+                        );
+                    }
+                    salesOrderRepository.save(so);
                 }
             });
         }
