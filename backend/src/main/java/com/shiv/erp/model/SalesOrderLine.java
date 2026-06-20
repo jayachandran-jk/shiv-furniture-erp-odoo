@@ -34,4 +34,13 @@ public class SalesOrderLine {
     @Column(name = "delivered_qty")
     @Builder.Default
     private Integer deliveredQty = 0;
+
+    @Transient
+    private Integer shortageQty;
+
+    @Transient
+    private String autoCreatedOrderId;
+
+    @Transient
+    private String autoCreatedOrderNumber;
 }

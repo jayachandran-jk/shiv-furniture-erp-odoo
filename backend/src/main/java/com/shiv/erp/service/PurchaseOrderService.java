@@ -1,7 +1,12 @@
 package com.shiv.erp.service;
 
+import com.shiv.erp.model.ManufacturingOrder;
+import com.shiv.erp.model.MoComponent;
+import com.shiv.erp.model.Product;
 import com.shiv.erp.model.PurchaseOrder;
 import com.shiv.erp.model.PurchaseOrderLine;
+import com.shiv.erp.repository.ManufacturingOrderRepository;
+import com.shiv.erp.repository.ProductRepository;
 import com.shiv.erp.repository.PurchaseOrderRepository;
 import com.shiv.erp.repository.SalesOrderRepository;
 import com.shiv.erp.utils.SecurityUtils;
@@ -19,19 +24,25 @@ public class PurchaseOrderService {
     private final AuditLogService auditLogService;
     private final NotificationService notificationService;
     private final SalesOrderRepository salesOrderRepository;
+    private final ManufacturingOrderRepository manufacturingOrderRepository;
+    private final ProductRepository productRepository;
 
     public PurchaseOrderService(PurchaseOrderRepository purchaseOrderRepository,
                                StockLedgerService stockLedgerService,
                                ProcurementService procurementService,
                                AuditLogService auditLogService,
                                NotificationService notificationService,
-                               SalesOrderRepository salesOrderRepository) {
+                               SalesOrderRepository salesOrderRepository,
+                               ManufacturingOrderRepository manufacturingOrderRepository,
+                               ProductRepository productRepository) {
         this.purchaseOrderRepository = purchaseOrderRepository;
         this.stockLedgerService = stockLedgerService;
         this.procurementService = procurementService;
         this.auditLogService = auditLogService;
         this.notificationService = notificationService;
         this.salesOrderRepository = salesOrderRepository;
+        this.manufacturingOrderRepository = manufacturingOrderRepository;
+        this.productRepository = productRepository;
     }
 
     public String normalizeStatus(String status) {
@@ -311,6 +322,58 @@ public class PurchaseOrderService {
                 oldStatus,
                 newStatus
         );
+
+        // Unblock any MOs that were "Waiting for Materials" for received products
+        for (PurchaseOrderLine line : saved.getLines()) {
+            List<ManufacturingOrder> waitingMOs = manufacturingOrderRepository.findWaitingMOsByComponentProduct(line.getProductId());
+            for (ManufacturingOrder mo : waitingMOs) {
+                boolean allSatisfied = true;
+                if (mo.getComponents() != null) {
+                    for (MoComponent comp : mo.getComponents()) {
+                        Product compProd = productRepository.findById(comp.getProductId()).orElse(null);
+                        if (compProd == null || compProd.getOnHandQty() < comp.getRequiredQty()) {
+                            allSatisfied = false;
+                            break;
+                        }
+                    }
+                }
+                if (allSatisfied) {
+                    mo.setStatus("Confirmed");
+                    manufacturingOrderRepository.save(mo);
+                    auditLogService.logChange(
+                            "system",
+                            "ManufacturingOrder",
+                            mo.getId(),
+                            "Unblocked",
+                            "Waiting for Materials",
+                            "Confirmed"
+                    );
+                    notificationService.notifyUserOrRoles(
+                            mo.getAssigneeId(),
+                            List.of("manufacturing", "admin"),
+                            "MO Unblocked — Ready to Produce",
+                            String.format("Manufacturing Order %s now has all materials available. Production can begin.", mo.getNumber()),
+                            "MANUFACTURING_ORDER",
+                            mo.getId()
+                    );
+                    // Notify linked sales rep if MTO-triggered
+                    if (mo.getTriggeringSalesOrderId() != null) {
+                        salesOrderRepository.findById(mo.getTriggeringSalesOrderId()).ifPresent(so -> {
+                            String repId = so.getCreatedBy();
+                            if (repId != null && !repId.isEmpty()) {
+                                notificationService.createNotification(
+                                        repId,
+                                        "Production Unblocked for Your Order",
+                                        String.format("All materials are now available for MO %s linked to Sales Order %s. Production will start soon.", mo.getNumber(), so.getNumber()),
+                                        "SALES_ORDER",
+                                        so.getId()
+                                );
+                            }
+                        });
+                    }
+                }
+            }
+        }
 
         return saved;
     }

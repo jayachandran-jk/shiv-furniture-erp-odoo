@@ -118,7 +118,7 @@ function mapManufacturingOrder(mo: any): ManufacturingOrder {
       name: w.name,
       workCenterId: w.workCenterId,
       plannedMinutes: w.expectedDurationMinutes,
-      status: w.status,
+      status: w.status === "Completed" ? "Done" : w.status,
       startedAt: w.startedAt ? new Date(w.startedAt).getTime() : undefined,
       accumulatedMs: (w.actualDurationMinutes || 0) * 60000,
     })),
@@ -380,6 +380,9 @@ export const useERP = create<State>()(
               unitPrice: l.unitPrice,
               reservedQty: l.reservedQty,
               deliveredQty: l.deliveredQty,
+              shortageQty: l.shortageQty,
+              autoCreatedOrderId: l.autoCreatedOrderId,
+              autoCreatedOrderNumber: l.autoCreatedOrderNumber,
             })),
           }));
 
@@ -482,7 +485,7 @@ export const useERP = create<State>()(
       },
 
       confirmSalesOrder: async (id) => {
-        await apiCall(`/api/sales-orders/${id}/confirm`, "PATCH");
+        await apiCall(`/api/sales-orders/${id}/confirm`, "POST");
         await get().refreshData();
       },
 
@@ -591,7 +594,8 @@ export const useERP = create<State>()(
       },
 
       setWorkOrderStatus: async (moId, woId, status) => {
-        await apiCall(`/api/manufacturing/${moId}/work-orders/${woId}/status?status=${status}`, "POST");
+        const backendStatus = status === "Done" ? "Completed" : status;
+        await apiCall(`/api/manufacturing/${moId}/work-orders/${woId}/status?status=${backendStatus}`, "POST");
         await get().refreshData();
       },
 

@@ -46,6 +46,9 @@ public class StockLedgerService {
             case "MFG_RESERVE":
                 product.setReservedQty(oldReserved + quantity);
                 break;
+            case "SHORTAGE_DETECTED":
+                // No change to stock levels for shortage logs
+                break;
             case "SALES_DELIVERY":
             case "MFG_CONSUME":
                 product.setOnHandQty(oldOnHand - quantity);

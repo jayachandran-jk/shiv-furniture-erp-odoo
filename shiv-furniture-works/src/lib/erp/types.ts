@@ -90,6 +90,9 @@ export interface SoLine {
   unitPrice: number;
   reservedQty: number;
   deliveredQty: number;
+  shortageQty?: number;
+  autoCreatedOrderId?: string;
+  autoCreatedOrderNumber?: string;
 }
 export interface SalesOrder {
   id: string;

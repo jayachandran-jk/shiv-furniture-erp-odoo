@@ -1,10 +1,7 @@
 package com.shiv.erp.service;
 
-import com.shiv.erp.model.Product;
-import com.shiv.erp.model.SalesOrder;
-import com.shiv.erp.model.SalesOrderLine;
-import com.shiv.erp.repository.ProductRepository;
-import com.shiv.erp.repository.SalesOrderRepository;
+import com.shiv.erp.model.*;
+import com.shiv.erp.repository.*;
 import com.shiv.erp.utils.SecurityUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,17 +17,29 @@ public class SalesOrderService {
     private final StockLedgerService stockLedgerService;
     private final ProcurementService procurementService;
     private final AuditLogService auditLogService;
+    private final PurchaseOrderRepository purchaseOrderRepository;
+    private final ManufacturingOrderRepository manufacturingOrderRepository;
+    private final BoMRepository bomRepository;
+    private final VendorRepository vendorRepository;
 
     public SalesOrderService(SalesOrderRepository salesOrderRepository,
                              ProductRepository productRepository,
                              StockLedgerService stockLedgerService,
                              ProcurementService procurementService,
-                             AuditLogService auditLogService) {
+                             AuditLogService auditLogService,
+                             PurchaseOrderRepository purchaseOrderRepository,
+                             ManufacturingOrderRepository manufacturingOrderRepository,
+                             BoMRepository bomRepository,
+                             VendorRepository vendorRepository) {
         this.salesOrderRepository = salesOrderRepository;
         this.productRepository = productRepository;
         this.stockLedgerService = stockLedgerService;
         this.procurementService = procurementService;
         this.auditLogService = auditLogService;
+        this.purchaseOrderRepository = purchaseOrderRepository;
+        this.manufacturingOrderRepository = manufacturingOrderRepository;
+        this.bomRepository = bomRepository;
+        this.vendorRepository = vendorRepository;
     }
 
     @Transactional
@@ -120,45 +129,198 @@ public class SalesOrderService {
                 .orElseThrow(() -> new IllegalArgumentException("Sales order not found: " + id));
 
         if (!"Draft".equals(so.getStatus())) {
-            throw new IllegalStateException("Only Draft sales orders can be confirmed.");
+            throw new IllegalArgumentException("Only Draft sales orders can be confirmed.");
         }
 
         if (so.getLines() == null || so.getLines().isEmpty()) {
-            throw new IllegalStateException("Sales order must contain at least one line item.");
+            throw new IllegalArgumentException("Sales order must contain at least one line item.");
         }
 
         String userId = SecurityUtils.getCurrentUserId();
 
         for (SalesOrderLine line : so.getLines()) {
-            Product product = productRepository.findById(line.getProductId())
+            // 1. Re-fetch product's current stock fresh from DB with a pessimistic write lock
+            Product product = productRepository.findByIdForUpdate(line.getProductId())
                     .orElseThrow(() -> new IllegalArgumentException("Product not found: " + line.getProductId()));
 
+            // 2. Compute freeToUse
             int freeToUse = product.getOnHandQty() - product.getReservedQty();
             int orderedQty = line.getQty();
-            int toReserve = Math.min(orderedQty, Math.max(0, freeToUse));
+            int reserveQty = 0;
 
-            // Set line reservations
-            line.setReservedQty(toReserve);
+            // 3. If freeToUse >= line.orderedQty:
+            if (freeToUse >= orderedQty) {
+                reserveQty = orderedQty;
+                product.setReservedQty(product.getReservedQty() + reserveQty);
+                productRepository.save(product);
 
-            // Touch database through StockLedgerService (pessimistic lock on Product)
-            // Note: Since confirm allows proceeding into negative territory, we reserve the FULL ordered quantity
-            stockLedgerService.recordMovement(
-                    product.getId(),
-                    "SALES_RESERVE",
-                    orderedQty,
-                    "SO",
-                    so.getId(),
-                    "Reserve stock on Sales Order confirmation"
-            );
+                stockLedgerService.recordMovement(
+                        product.getId(),
+                        "SALES_RESERVE",
+                        reserveQty,
+                        "SO",
+                        so.getId(),
+                        "Reserve stock on Sales Order confirmation"
+                );
 
-            // Re-fetch product to get updated state (since stockLedgerService updated it)
-            Product updatedProduct = productRepository.findById(product.getId()).orElse(product);
-            
-            // Check shortfall
-            int shortfall = orderedQty - toReserve;
-            if (shortfall > 0 && "MTO".equalsIgnoreCase(updatedProduct.getStrategy())) {
-                // Auto trigger procurement for shortfall (only for MTO strategy)
-                procurementService.triggerProcurement(updatedProduct, shortfall, so.getId());
+                line.setReservedQty(reserveQty);
+                line.setShortageQty(0);
+                line.setAutoCreatedOrderId(null);
+                line.setAutoCreatedOrderNumber(null);
+            }
+            // 4. If freeToUse < line.orderedQty (shortage):
+            else {
+                reserveQty = Math.max(freeToUse, 0);
+                int shortageQty = orderedQty - reserveQty;
+
+                if (reserveQty > 0) {
+                    product.setReservedQty(product.getReservedQty() + reserveQty);
+                    productRepository.save(product);
+
+                    stockLedgerService.recordMovement(
+                        product.getId(),
+                        "SALES_RESERVE",
+                        reserveQty,
+                        "SO",
+                        so.getId(),
+                        "Reserve stock on Sales Order confirmation"
+                    );
+                }
+
+                line.setReservedQty(reserveQty);
+                line.setShortageQty(shortageQty);
+
+                String autoCreatedOrderId = null;
+                String autoCreatedOrderNumber = null;
+
+                if ("purchase".equalsIgnoreCase(product.getProcurementType())) {
+                    String vendorId = product.getPreferredVendorId();
+                    if (vendorId == null || vendorId.isEmpty()) {
+                        List<Vendor> vendors = vendorRepository.findAll();
+                        if (!vendors.isEmpty()) {
+                            vendorId = vendors.get(0).getId();
+                        } else {
+                            vendorId = "v-temp";
+                        }
+                    }
+
+                    String poNumber = procurementService.generateNextNumber("PO", purchaseOrderRepository.findFirstByOrderByNumberDesc().map(PurchaseOrder::getNumber));
+                    String poId = "po-" + UUID.randomUUID().toString().substring(0, 8);
+
+                    PurchaseOrderLine poLine = PurchaseOrderLine.builder()
+                            .id("pol-" + UUID.randomUUID().toString().substring(0, 8))
+                            .purchaseOrderId(poId)
+                            .productId(product.getId())
+                            .qty(shortageQty)
+                            .unitPrice(product.getCostPrice() != null ? product.getCostPrice() : BigDecimal.ZERO)
+                            .receivedQty(0)
+                            .build();
+
+                    List<PurchaseOrderLine> poLines = new ArrayList<>();
+                    poLines.add(poLine);
+
+                    PurchaseOrder po = PurchaseOrder.builder()
+                            .id(poId)
+                            .number(poNumber)
+                            .vendorId(vendorId)
+                            .status("Draft")
+                            .createdBy(userId != null ? userId : "system")
+                            .isAutoGenerated(true)
+                            .triggeringSalesOrderId(so.getId())
+                            .lines(poLines)
+                            .build();
+
+                    purchaseOrderRepository.save(po);
+
+                    autoCreatedOrderId = poId;
+                    autoCreatedOrderNumber = poNumber;
+
+                    auditLogService.logChange(
+                            userId != null ? userId : "system",
+                            "PurchaseOrder",
+                            poId,
+                            "Auto-created",
+                            null,
+                            String.format("{\"info\": \"Draft auto-generated for %s due to stock shortfall of %d\"}", product.getSku(), shortageQty)
+                    );
+                } else if ("manufacturing".equalsIgnoreCase(product.getProcurementType())) {
+                    if (product.getBomId() == null || product.getBomId().isEmpty()) {
+                        throw new IllegalArgumentException("No BoM linked, cannot auto-manufacture");
+                    }
+                    BoM bom = bomRepository.findById(product.getBomId())
+                            .orElseThrow(() -> new IllegalArgumentException("No BoM linked, cannot auto-manufacture"));
+
+                    String moNumber = procurementService.generateNextNumber("MO", manufacturingOrderRepository.findFirstByOrderByNumberDesc().map(ManufacturingOrder::getNumber));
+                    String moId = "mo-" + UUID.randomUUID().toString().substring(0, 8);
+
+                    List<MoComponent> moComponents = new ArrayList<>();
+                    if (bom.getComponents() != null) {
+                        for (BomComponent bc : bom.getComponents()) {
+                            int reqQty = (int) Math.ceil(bc.getQty() * shortageQty);
+                            moComponents.add(MoComponent.builder()
+                                    .moId(moId)
+                                    .productId(bc.getProductId())
+                                    .requiredQty(reqQty)
+                                    .toConsumeQty(reqQty)
+                                    .consumedQty(0)
+                                    .build());
+                        }
+                    }
+
+                    List<WorkOrder> workOrders = new ArrayList<>();
+                    if (bom.getOperations() != null) {
+                        for (BomOperation bo : bom.getOperations()) {
+                            workOrders.add(WorkOrder.builder()
+                                    .id("wo-" + UUID.randomUUID().toString().substring(0, 8))
+                                    .moId(moId)
+                                    .name(bo.getName())
+                                    .workCenterId(bo.getWorkCenterId())
+                                    .status("Pending")
+                                    .expectedDurationMinutes(bo.getDurationMinutes())
+                                    .actualDurationMinutes(0)
+                                    .build());
+                        }
+                    }
+
+                    ManufacturingOrder mo = ManufacturingOrder.builder()
+                            .id(moId)
+                            .number(moNumber)
+                            .productId(product.getId())
+                            .qty(shortageQty)
+                            .status("Draft")
+                            .assigneeId(null)
+                            .isAutoGenerated(true)
+                            .triggeringSalesOrderId(so.getId())
+                            .components(moComponents)
+                            .workOrders(workOrders)
+                            .build();
+
+                    manufacturingOrderRepository.save(mo);
+
+                    autoCreatedOrderId = moId;
+                    autoCreatedOrderNumber = moNumber;
+
+                    auditLogService.logChange(
+                            userId != null ? userId : "system",
+                            "ManufacturingOrder",
+                            moId,
+                            "Auto-created",
+                            null,
+                            String.format("{\"info\": \"Draft auto-generated for %s due to stock shortfall of %d\"}", product.getSku(), shortageQty)
+                    );
+                }
+
+                line.setAutoCreatedOrderId(autoCreatedOrderId);
+                line.setAutoCreatedOrderNumber(autoCreatedOrderNumber);
+
+                stockLedgerService.recordMovement(
+                        product.getId(),
+                        "SHORTAGE_DETECTED",
+                        shortageQty,
+                        "SO",
+                        so.getId(),
+                        "Shortage detected for SKU: " + product.getSku()
+                );
             }
         }
 
@@ -166,7 +328,7 @@ public class SalesOrderService {
         SalesOrder saved = salesOrderRepository.save(so);
 
         auditLogService.logChange(
-                userId,
+                userId != null ? userId : "system",
                 "SalesOrder",
                 saved.getId(),
                 "Confirmed",

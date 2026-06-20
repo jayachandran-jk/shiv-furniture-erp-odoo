@@ -136,8 +136,9 @@ public class ManufacturingOrderService {
         }
 
         String userId = SecurityUtils.getCurrentUserId();
+        boolean waitingForMaterials = false;
 
-        // Reserve component stock
+        // Reserve component stock and check real availability
         if (mo.getComponents() != null) {
             for (MoComponent comp : mo.getComponents()) {
                 stockLedgerService.recordMovement(
@@ -148,20 +149,37 @@ public class ManufacturingOrderService {
                         mo.getId(),
                         "Reserve stock for Manufacturing Order"
                 );
+                // After reserving, check if actual on-hand covers the requirement
+                Product compProduct = productRepository.findById(comp.getProductId()).orElse(null);
+                if (compProduct != null && compProduct.getOnHandQty() < comp.getRequiredQty()) {
+                    waitingForMaterials = true;
+                }
             }
         }
 
-        mo.setStatus("Confirmed");
+        String newStatus = waitingForMaterials ? "Waiting for Materials" : "Confirmed";
+        mo.setStatus(newStatus);
         ManufacturingOrder saved = manufacturingOrderRepository.save(mo);
 
         auditLogService.logChange(
                 userId,
                 "ManufacturingOrder",
                 saved.getId(),
-                "Confirmed",
+                waitingForMaterials ? "Waiting for Materials" : "Confirmed",
                 "Draft",
-                "Confirmed"
+                newStatus
         );
+
+        if (waitingForMaterials) {
+            notificationService.notifyUserOrRoles(
+                    saved.getAssigneeId(),
+                    List.of("manufacturing", "admin"),
+                    "MO Waiting for Materials",
+                    String.format("Manufacturing Order %s is blocked: one or more components are insufficient. It will unblock automatically when stock is received.", saved.getNumber()),
+                    "MANUFACTURING_ORDER",
+                    saved.getId()
+            );
+        }
 
         return saved;
     }
@@ -223,15 +241,16 @@ public class ManufacturingOrderService {
             targetWo.setCompletedAt(now);
         }
 
-        // Auto transition MO to In Progress if it is Confirmed and any work order is Started/Paused/Completed
-        if ("Confirmed".equals(mo.getStatus())) {
+        // Auto transition MO to In Progress if it is Confirmed or Waiting for Materials and any work order is Started/Paused/Completed
+        if ("Confirmed".equals(mo.getStatus()) || "Waiting for Materials".equals(mo.getStatus())) {
+            String oldMoStatus = mo.getStatus();
             mo.setStatus("In Progress");
             auditLogService.logChange(
                     SecurityUtils.getCurrentUserId(),
                     "ManufacturingOrder",
                     mo.getId(),
                     "StatusChanged",
-                    "Confirmed",
+                    oldMoStatus,
                     "In Progress"
             );
         }
@@ -350,8 +369,8 @@ public class ManufacturingOrderService {
         String userId = SecurityUtils.getCurrentUserId();
         String oldStatus = mo.getStatus();
 
-        // Release reserved stock for components if Confirmed or In Progress
-        if ("Confirmed".equals(mo.getStatus()) || "In Progress".equals(mo.getStatus())) {
+        // Release reserved stock for components if Confirmed, In Progress, or Waiting for Materials
+        if ("Confirmed".equals(mo.getStatus()) || "In Progress".equals(mo.getStatus()) || "Waiting for Materials".equals(mo.getStatus())) {
             if (mo.getComponents() != null) {
                 for (MoComponent comp : mo.getComponents()) {
                     // Since it was reserved, we release it

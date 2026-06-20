@@ -246,6 +246,28 @@ function SalesDetail() {
                         {overstock && <span className="ml-2 font-medium">⚠ Short by {l.qty - free}</span>}
                       </div>
                     )}
+                    {!isDraft && (l.reservedQty ?? 0) < l.qty && (
+                      <div className="mt-0.5 text-[11px] text-warning flex items-center gap-1.5 flex-wrap">
+                        <span>{l.reservedQty ?? 0} reserved, {l.qty - (l.reservedQty ?? 0)} short</span>
+                        {l.autoCreatedOrderId && (
+                          <span className="inline-flex items-center gap-1 font-medium bg-warning/10 text-warning px-1.5 py-0.5 rounded text-[10px]">
+                            Short by {l.qty - (l.reservedQty ?? 0)} — {
+                              hasPermission(user?.role, l.autoCreatedOrderNumber?.startsWith("PO") ? "purchase:read" : "manufacturing:read") ? (
+                                <Link
+                                  to={l.autoCreatedOrderNumber?.startsWith("PO") ? "/purchase/$id" : "/manufacturing/$id"}
+                                  params={{ id: l.autoCreatedOrderId }}
+                                  className="underline hover:text-warning/80"
+                                >
+                                  {l.autoCreatedOrderNumber} created
+                                </Link>
+                              ) : (
+                                <span>{l.autoCreatedOrderNumber} created</span>
+                              )
+                            }
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </td>
                   <td className="px-3 py-2.5 text-right tabular">{l.qty}</td>
                   <td className="px-3 py-2.5 text-right tabular">

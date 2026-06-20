@@ -25,6 +25,7 @@ public class ProcurementService {
     private final VendorRepository vendorRepository;
     private final NotificationService notificationService;
     private final AutomationEventRepository automationEventRepository;
+    private final SalesOrderRepository salesOrderRepository;
 
     public ProcurementService(ProductRepository productRepository,
                               PurchaseOrderRepository purchaseOrderRepository,
@@ -33,7 +34,8 @@ public class ProcurementService {
                               @Lazy AuditLogService auditLogService,
                               VendorRepository vendorRepository,
                               NotificationService notificationService,
-                              AutomationEventRepository automationEventRepository) {
+                              AutomationEventRepository automationEventRepository,
+                              SalesOrderRepository salesOrderRepository) {
         this.productRepository = productRepository;
         this.purchaseOrderRepository = purchaseOrderRepository;
         this.manufacturingOrderRepository = manufacturingOrderRepository;
@@ -42,6 +44,7 @@ public class ProcurementService {
         this.vendorRepository = vendorRepository;
         this.notificationService = notificationService;
         this.automationEventRepository = automationEventRepository;
+        this.salesOrderRepository = salesOrderRepository;
     }
 
     public synchronized void checkAndTriggerProcurement(String productId) {
@@ -208,6 +211,22 @@ public class ProcurementService {
                             poId
                     );
 
+                    // Notify sales rep if triggered by a sales order
+                    if (triggeringSalesOrderId != null && !triggeringSalesOrderId.isEmpty()) {
+                        salesOrderRepository.findById(triggeringSalesOrderId).ifPresent(so -> {
+                            String repId = so.getCreatedBy();
+                            if (repId != null && !repId.isEmpty()) {
+                                notificationService.createNotification(
+                                        repId,
+                                        "Procurement Raised for Your Order",
+                                        String.format("Stock shortage of %d for SKU %s on Sales Order %s. Draft PO %s has been auto-created.", shortage, product.getSku(), so.getNumber(), poNumber),
+                                        "PURCHASE_ORDER",
+                                        poId
+                                );
+                            }
+                        });
+                    }
+
                     auditLogService.logChange(
                             "system",
                             "PurchaseOrder",
@@ -364,6 +383,22 @@ public class ProcurementService {
                             "MANUFACTURING_ORDER",
                             moId
                     );
+
+                    // Notify sales rep if triggered by a sales order
+                    if (triggeringSalesOrderId != null && !triggeringSalesOrderId.isEmpty()) {
+                        salesOrderRepository.findById(triggeringSalesOrderId).ifPresent(so -> {
+                            String repId = so.getCreatedBy();
+                            if (repId != null && !repId.isEmpty()) {
+                                notificationService.createNotification(
+                                        repId,
+                                        "Manufacturing Raised for Your Order",
+                                        String.format("Stock shortage of %d for SKU %s on Sales Order %s. Draft MO %s has been auto-created.", shortage, product.getSku(), so.getNumber(), moNumber),
+                                        "MANUFACTURING_ORDER",
+                                        moId
+                                );
+                            }
+                        });
+                    }
 
                     auditLogService.logChange(
                             "system",

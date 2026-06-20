@@ -66,7 +66,7 @@ public class SalesOrderController {
         }
     }
 
-    @PatchMapping("/{id}/confirm")
+    @RequestMapping(value = "/{id}/confirm", method = {RequestMethod.POST, RequestMethod.PATCH})
     @PreAuthorize("hasAnyRole('ADMIN','SALES')")
     public ResponseEntity<?> confirmOrder(@PathVariable String id) {
         try {
