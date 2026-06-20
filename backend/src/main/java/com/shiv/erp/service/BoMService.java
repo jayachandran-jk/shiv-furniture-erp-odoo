@@ -130,9 +130,7 @@ public class BoMService {
         bom.getComponents().clear();
         if (patch.getComponents() != null) {
             for (BomComponent bc : patch.getComponents()) {
-                if (bc.getId() == null || bc.getId().isEmpty()) {
-                    bc.setId("bc-" + UUID.randomUUID().toString().substring(0, 8));
-                }
+                bc.setId("bc-" + UUID.randomUUID().toString().substring(0, 8));
                 bc.setBomId(id);
                 bom.getComponents().add(bc);
             }
@@ -142,9 +140,7 @@ public class BoMService {
         bom.getOperations().clear();
         if (patch.getOperations() != null) {
             for (BomOperation bo : patch.getOperations()) {
-                if (bo.getId() == null || bo.getId().isEmpty()) {
-                    bo.setId("bo-" + UUID.randomUUID().toString().substring(0, 8));
-                }
+                bo.setId("bo-" + UUID.randomUUID().toString().substring(0, 8));
                 bo.setBomId(id);
                 if (bo.getSequence() == null || bo.getSequence() == 0) {
                     int lastSeq = bom.getOperations().stream()

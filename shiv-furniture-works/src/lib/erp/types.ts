@@ -138,7 +138,7 @@ export interface WorkOrder {
   accumulatedMs: number;
 }
 
-export type MoStatus = "Draft" | "Confirmed" | "In Progress" | "Done" | "Cancelled";
+export type MoStatus = "Draft" | "Confirmed" | "Waiting for Materials" | "In Progress" | "Done" | "Cancelled";
 export interface ManufacturingOrder {
   id: string;
   number: string;
