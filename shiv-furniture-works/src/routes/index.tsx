@@ -207,7 +207,17 @@ function Hero() {
 
       <div className="relative mx-auto mt-16 max-w-6xl animate-fade-up" style={{ animationDelay: "320ms" }}>
         <div className="absolute -inset-x-10 -top-10 -z-10 h-72 rounded-[3rem] opacity-60 blur-3xl" style={{ background: "var(--gradient-primary)" }} />
-        <HeroDashboard />
+        <div className="glass-card rounded-2xl p-3 sm:p-5 overflow-hidden">
+          <div className="flex items-center gap-1.5 px-2 pb-3 border-b border-white/5 mb-3">
+            <span className="h-2.5 w-2.5 rounded-full bg-red-500/70" />
+            <span className="h-2.5 w-2.5 rounded-full bg-yellow-500/70" />
+            <span className="h-2.5 w-2.5 rounded-full bg-green-500/70" />
+            <div className="ml-3 flex h-6 flex-1 items-center rounded-md bg-white/5 px-3 text-[11px] text-muted-foreground">
+              app.shiverp.io / operations / dashboard
+            </div>
+          </div>
+          <img src="/dashboard_actual.png" alt="Operations Dashboard" className="w-full h-auto rounded-xl shadow-lg border border-white/10" />
+        </div>
       </div>
     </section>
   );
