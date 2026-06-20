@@ -248,6 +248,51 @@ function Dashboard() {
                 <div className="text-[10px] text-muted-foreground">{salesPoints[hoveredPoint].label}</div>
               </div>
             )}
+            {/* Y Axis Labels (HTML) */}
+            <div 
+              className="absolute left-0 top-0 bottom-0 pointer-events-none"
+              style={{ width: `${(paddingLeft / chartWidth) * 100}%` }}
+            >
+              <div 
+                className="absolute text-[10px] text-muted-foreground font-medium text-right right-2.5"
+                style={{ top: `${((chartHeight - paddingBottom - graphHeight) / chartHeight) * 100}%`, transform: "translateY(-50%)" }}
+              >
+                {maxCount}
+              </div>
+              <div 
+                className="absolute text-[10px] text-muted-foreground font-medium text-right right-2.5"
+                style={{ top: `${((chartHeight - paddingBottom - graphHeight / 2) / chartHeight) * 100}%`, transform: "translateY(-50%)" }}
+              >
+                {Math.round(maxCount / 2)}
+              </div>
+              <div 
+                className="absolute text-[10px] text-muted-foreground font-medium text-right right-2.5"
+                style={{ top: `${((chartHeight - paddingBottom) / chartHeight) * 100}%`, transform: "translateY(-50%)" }}
+              >
+                0
+              </div>
+            </div>
+
+            {/* X Axis Labels (HTML) */}
+            <div 
+              className="absolute left-0 right-0 bottom-0 pointer-events-none"
+              style={{ height: '20px' }}
+            >
+              {salesPoints.map((p, i) => (
+                <div
+                  key={i}
+                  className="absolute text-[9px] text-muted-foreground font-medium whitespace-nowrap"
+                  style={{
+                    left: `${(p.x / chartWidth) * 100}%`,
+                    transform: "translateX(-50%)",
+                    bottom: "2px",
+                  }}
+                >
+                  {p.label}
+                </div>
+              ))}
+            </div>
+
             <svg className="w-full h-full" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none">
               <defs>
                 <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
@@ -260,16 +305,6 @@ function Dashboard() {
               <line x1={paddingLeft} y1={chartHeight - paddingBottom} x2={chartWidth - paddingRight} y2={chartHeight - paddingBottom} stroke="currentColor" className="text-border" strokeWidth="1" strokeDasharray="3 3" />
               <line x1={paddingLeft} y1={chartHeight - paddingBottom - graphHeight / 2} x2={chartWidth - paddingRight} y2={chartHeight - paddingBottom - graphHeight / 2} stroke="currentColor" className="text-border/60" strokeWidth="1" strokeDasharray="3 3" />
               <line x1={paddingLeft} y1={chartHeight - paddingBottom - graphHeight} x2={chartWidth - paddingRight} y2={chartHeight - paddingBottom - graphHeight} stroke="currentColor" className="text-border/60" strokeWidth="1" strokeDasharray="3 3" />
-
-              {/* Y Axis Labels */}
-              <text x={paddingLeft - 10} y={chartHeight - paddingBottom + 4} textAnchor="end" className="text-[10px] fill-muted-foreground font-medium">0</text>
-              <text x={paddingLeft - 10} y={chartHeight - paddingBottom - graphHeight / 2 + 4} textAnchor="end" className="text-[10px] fill-muted-foreground font-medium">{Math.round(maxCount / 2)}</text>
-              <text x={paddingLeft - 10} y={chartHeight - paddingBottom - graphHeight + 4} textAnchor="end" className="text-[10px] fill-muted-foreground font-medium">{maxCount}</text>
-
-              {/* X Axis Labels */}
-              {salesPoints.map((p, i) => (
-                <text key={i} x={p.x} y={chartHeight - 10} textAnchor="middle" className="text-[9px] fill-muted-foreground font-medium">{p.label}</text>
-              ))}
 
               {/* Area path */}
               {areaPath && <path d={areaPath} fill="url(#areaGradient)" />}
