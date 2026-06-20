@@ -40,6 +40,11 @@ public class ProcurementService {
         Product product = productRepository.findById(productId).orElse(null);
         if (product == null) return;
 
+        // Only MTS products trigger threshold-based automatic replenishment
+        if (product.getStrategy() == null || !"MTS".equalsIgnoreCase(product.getStrategy())) {
+            return;
+        }
+
         int freeToUse = product.getOnHandQty() - product.getReservedQty();
         int threshold = product.getReorderThreshold();
 
@@ -161,18 +166,31 @@ public class ProcurementService {
     }
 
     public String generateNextNumber(String prefix, Optional<String> lastNumberOpt) {
-        int nextSeq = 1;
-        if (lastNumberOpt.isPresent()) {
-            String lastNum = lastNumberOpt.get();
-            try {
-                // Extract number: lastNum can be e.g. PO-000012 or PO-2026-0089. We'll parse whatever suffix is present.
-                String[] parts = lastNum.split("-");
-                String seqStr = parts[parts.length - 1];
-                nextSeq = Integer.parseInt(seqStr) + 1;
-            } catch (Exception e) {
-                // Fail-safe default
-            }
+        if (!lastNumberOpt.isPresent()) {
+            return String.format("%s-%06d", prefix, 1);
         }
-        return String.format("%s-%06d", prefix, nextSeq);
+
+        String lastNum = lastNumberOpt.get();
+        try {
+            String[] parts = lastNum.split("-");
+            if (parts.length > 1) {
+                String seqStr = parts[parts.length - 1];
+                int nextSeq = Integer.parseInt(seqStr) + 1;
+
+                // Reconstruct the prefix parts
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < parts.length - 1; i++) {
+                    if (i > 0) sb.append("-");
+                    sb.append(parts[i]);
+                }
+
+                // Keep the exact same padding length as the last suffix
+                String formatStr = "%s-%0" + seqStr.length() + "d";
+                return String.format(formatStr, sb.toString(), nextSeq);
+            }
+        } catch (Exception e) {
+            // Fail-safe default
+        }
+        return String.format("%s-%06d", prefix, 1);
     }
 }

@@ -111,8 +111,8 @@ public class SalesOrderService {
             
             // Check shortfall
             int shortfall = orderedQty - toReserve;
-            if (shortfall > 0) {
-                // Auto trigger procurement for shortfall
+            if (shortfall > 0 && "MTO".equalsIgnoreCase(updatedProduct.getStrategy())) {
+                // Auto trigger procurement for shortfall (only for MTO strategy)
                 procurementService.triggerProcurement(updatedProduct, shortfall, so.getId());
             }
         }
