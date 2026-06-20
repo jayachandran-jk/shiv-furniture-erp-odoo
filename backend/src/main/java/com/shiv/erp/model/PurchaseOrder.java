@@ -25,6 +25,12 @@ public class PurchaseOrder {
     @Column(insertable = false, updatable = false)
     private LocalDateTime date;
 
+    @Column(name = "expected_delivery_date")
+    private LocalDateTime expectedDeliveryDate;
+
+    @Column(columnDefinition = "TEXT")
+    private String notes;
+
     @Column(nullable = false, length = 50)
     private String status; // Draft, Confirmed, Partially Received, Fully Received, Cancelled
 

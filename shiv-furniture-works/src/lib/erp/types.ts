@@ -1,4 +1,4 @@
-export type Role = "admin" | "sales" | "purchase" | "manufacturing" | "inventory" | "owner";
+export type Role = "admin" | "sales" | "purchase" | "manufacturing" | "inventory" | "owner" | "operations";
 
 export interface User {
   id: string;
@@ -29,15 +29,55 @@ export interface Product {
   reserved: number;
 }
 
-export interface Vendor { id: string; name: string; contact?: string }
+export interface Vendor {
+  id: string;
+  name: string;
+  contact?: string;
+  contactPerson?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  createdAt?: string;
+}
 export interface Customer { id: string; name: string; contact?: string; address?: string }
-export interface WorkCenter { id: string; name: string }
+export interface WorkCenter {
+  id: string;
+  name: string;
+  description?: string;
+  capacityPerDay?: number;
+  createdAt?: string;
+}
 
-export interface BomComponent { productId: string; qty: number }
-export interface BomOperation { id: string; name: string; workCenterId: string; durationMinutes: number }
+export interface BomComponent {
+  id?: string;
+  bomId?: string;
+  productId: string;
+  qty: number;
+  unitOfMeasure?: string;
+  notes?: string;
+}
+
+export interface BomOperation {
+  id: string;
+  bomId?: string;
+  sequence: number;
+  name: string;
+  workCenterId: string;
+  durationMinutes: number;
+  notes?: string;
+}
+
 export interface BoM {
   id: string;
+  bomReference: string;
   productId: string;
+  qtyProduced: number;
+  version: number;
+  isActive: boolean;
+  notes?: string;
+  createdBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
   components: BomComponent[];
   operations: BomOperation[];
 }
@@ -62,7 +102,7 @@ export interface SalesOrder {
   lines: SoLine[];
 }
 
-export type PoStatus = "Draft" | "Confirmed" | "Partially Received" | "Fully Received" | "Cancelled";
+export type PoStatus = "Draft" | "Booked" | "Confirmed" | "Partially Received" | "Fully Received" | "Cancelled";
 export interface PoLine {
   id: string;
   productId: string;
@@ -75,6 +115,8 @@ export interface PurchaseOrder {
   number: string;
   vendorId: string;
   date: string;
+  expectedDeliveryDate?: string;
+  notes?: string;
   status: PoStatus;
   createdBy: string;
   lines: PoLine[];

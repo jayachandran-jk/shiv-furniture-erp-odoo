@@ -3,87 +3,151 @@ package com.shiv.erp.controller;
 import com.shiv.erp.model.BoM;
 import com.shiv.erp.model.BomComponent;
 import com.shiv.erp.model.BomOperation;
+import com.shiv.erp.model.Product;
+import com.shiv.erp.model.WorkCenter;
 import com.shiv.erp.repository.BoMRepository;
-import com.shiv.erp.service.AuditLogService;
-import com.shiv.erp.utils.SecurityUtils;
+import com.shiv.erp.repository.ProductRepository;
+import com.shiv.erp.repository.WorkCenterRepository;
+import com.shiv.erp.service.BoMService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/boms")
 public class BoMController {
 
     private final BoMRepository bomRepository;
-    private final AuditLogService auditLogService;
+    private final BoMService bomService;
+    private final ProductRepository productRepository;
+    private final WorkCenterRepository workCenterRepository;
 
-    public BoMController(BoMRepository bomRepository, AuditLogService auditLogService) {
+    public BoMController(BoMRepository bomRepository,
+                         BoMService bomService,
+                         ProductRepository productRepository,
+                         WorkCenterRepository workCenterRepository) {
         this.bomRepository = bomRepository;
-        this.auditLogService = auditLogService;
+        this.bomService = bomService;
+        this.productRepository = productRepository;
+        this.workCenterRepository = workCenterRepository;
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','MANUFACTURING','OWNER')")
-    public ResponseEntity<List<BoM>> getAllBoms() {
-        return ResponseEntity.ok(bomRepository.findAll());
+    @PreAuthorize("hasAnyRole('admin','operations','owner')")
+    public ResponseEntity<List<BoM>> getAllBoms(
+            @RequestParam(required = false) String productId,
+            @RequestParam(required = false) Boolean isActive
+    ) {
+        List<BoM> boms = bomRepository.findAll();
+
+        if (productId != null && !productId.isEmpty()) {
+            boms = boms.stream()
+                    .filter(b -> b.getProductId().equals(productId))
+                    .collect(Collectors.toList());
+        }
+
+        if (isActive != null) {
+            boms = boms.stream()
+                    .filter(b -> b.getIsActive().equals(isActive))
+                    .collect(Collectors.toList());
+        }
+
+        return ResponseEntity.ok(boms);
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','MANUFACTURING','OWNER')")
-    public ResponseEntity<?> getBomDetail(@PathVariable String id) {
-        BoM bom = bomRepository.findById(id).orElse(null);
-        if (bom == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("error", "Bill of Materials not found"));
-        }
+    @PreAuthorize("hasAnyRole('admin','operations','owner')")
+    public ResponseEntity<BoM> getBomDetail(@PathVariable String id) {
+        BoM bom = bomRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bill of Materials not found"));
         return ResponseEntity.ok(bom);
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','MANUFACTURING')")
-    @Transactional
-    public ResponseEntity<?> createBom(@RequestBody BoM bom) {
-        if (bom.getId() == null || bom.getId().isEmpty()) {
-            bom.setId("bom-" + UUID.randomUUID().toString().substring(0, 8));
+    @PreAuthorize("hasAnyRole('admin','operations')")
+    public ResponseEntity<BoM> createBom(@RequestBody BoM bom) {
+        BoM created = bomService.createBom(bom);
+        return ResponseEntity.status(HttpStatus.CREATED).body(created);
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('admin','operations')")
+    public ResponseEntity<BoM> updateBom(@PathVariable String id, @RequestBody BoM bom) {
+        BoM updated = bomService.updateBom(id, bom);
+        return ResponseEntity.ok(updated);
+    }
+
+    @PostMapping("/{id}/deactivate")
+    @PreAuthorize("hasAnyRole('admin','operations')")
+    public ResponseEntity<Void> deactivateBom(@PathVariable String id) {
+        bomService.deactivateBom(id);
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/by-product/{productId}")
+    @PreAuthorize("hasAnyRole('admin','operations','owner')")
+    public ResponseEntity<?> getBomByProduct(@PathVariable String productId) {
+        BoM bom = bomRepository.findByProductIdAndIsActiveTrue(productId).orElse(null);
+        if (bom == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", "No active BoM found for this product"));
         }
 
-        if (bomRepository.findById(bom.getId()).isPresent()) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(Map.of("error", "BoM ID is already in use"));
-        }
-
-        // Set references on sub-items
+        // Map components with product details and stock status
+        List<Map<String, Object>> componentsMapped = new ArrayList<>();
         if (bom.getComponents() != null) {
-            for (BomComponent comp : bom.getComponents()) {
-                comp.setBomId(bom.getId());
+            for (BomComponent bc : bom.getComponents()) {
+                Product compProd = productRepository.findById(bc.getProductId()).orElse(null);
+                String compName = compProd != null ? compProd.getName() : "Unknown Product";
+                double freeToUse = compProd != null ? (compProd.getOnHandQty() - compProd.getReservedQty()) : 0.0;
+
+                Map<String, Object> cMap = new HashMap<>();
+                cMap.put("id", bc.getId());
+                cMap.put("componentProductId", bc.getProductId());
+                cMap.put("componentProductName", compName);
+                cMap.put("qtyRequired", bc.getQty());
+                cMap.put("unitOfMeasure", bc.getUnitOfMeasure());
+                cMap.put("currentFreeToUseQty", freeToUse);
+                componentsMapped.add(cMap);
             }
         }
 
+        // Map operations with work center name
+        List<Map<String, Object>> operationsMapped = new ArrayList<>();
         if (bom.getOperations() != null) {
-            for (BomOperation op : bom.getOperations()) {
-                if (op.getId() == null || op.getId().isEmpty()) {
-                    op.setId("op-" + UUID.randomUUID().toString().substring(0, 8));
+            for (BomOperation bo : bom.getOperations()) {
+                WorkCenter wc = null;
+                if (bo.getWorkCenterId() != null) {
+                    wc = workCenterRepository.findById(bo.getWorkCenterId()).orElse(null);
                 }
-                op.setBomId(bom.getId());
+                String wcName = wc != null ? wc.getName() : "Unknown Work Center";
+
+                Map<String, Object> oMap = new HashMap<>();
+                oMap.put("id", bo.getId());
+                oMap.put("sequence", bo.getSequence());
+                oMap.put("operationName", bo.getName());
+                oMap.put("workCenterId", bo.getWorkCenterId());
+                oMap.put("workCenterName", wcName);
+                oMap.put("durationMinutes", bo.getDurationMinutes());
+                operationsMapped.add(oMap);
             }
         }
 
-        BoM saved = bomRepository.save(bom);
+        Map<String, Object> response = new HashMap<>();
+        response.put("bomId", bom.getId());
+        response.put("bomReference", bom.getBomReference());
+        response.put("qtyProduced", bom.getQtyProduced());
+        response.put("components", componentsMapped);
+        response.put("operations", operationsMapped);
 
-        auditLogService.logChange(
-                SecurityUtils.getCurrentUserId(),
-                "BoM",
-                saved.getId(),
-                "Created",
-                null,
-                String.format("{\"productId\": \"%s\"}", saved.getProductId())
-        );
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+        return ResponseEntity.ok(response);
     }
 }

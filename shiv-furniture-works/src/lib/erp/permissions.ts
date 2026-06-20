@@ -9,6 +9,7 @@ export type Permission =
   | "products:read" | "products:write"
   | "bom:read" | "bom:write"
   | "audit:read"
+  | "automation:read"
   | "settings:read" | "settings:write";
 
 /** Role → set of permissions */
@@ -22,6 +23,7 @@ const MATRIX: Record<Role, Set<Permission>> = {
     "products:read", "products:write",
     "bom:read", "bom:write",
     "audit:read",
+    "automation:read",
     "settings:read", "settings:write",
   ]),
   sales: new Set([
@@ -61,6 +63,19 @@ const MATRIX: Record<Role, Set<Permission>> = {
     "products:read", "products:write",
     "bom:read",
     "audit:read",
+    "automation:read",
+  ]),
+  operations: new Set([
+    "dashboard:read",
+    "sales:read", "sales:write",
+    "purchase:read", "purchase:write",
+    "manufacturing:read", "manufacturing:write",
+    "inventory:read", "inventory:write",
+    "products:read", "products:write",
+    "bom:read", "bom:write",
+    "audit:read",
+    "automation:read",
+    "settings:read", "settings:write",
   ]),
 };
 
@@ -87,6 +102,7 @@ const ALL_NAV: NavItem[] = [
   { to: "/manufacturing", label: "Manufacturing", icon: "Factory", readPerm: "manufacturing:read" },
   { to: "/bom",       label: "Bill of Materials", icon: "ClipboardList", readPerm: "bom:read" },
   { to: "/audit",     label: "Audit Log", icon: "FileText",        readPerm: "audit:read" },
+  { to: "/automation", label: "Automation", icon: "Zap",           readPerm: "automation:read" },
   { to: "/settings",  label: "Settings",  icon: "Settings",        readPerm: "settings:read" },
 ];
 

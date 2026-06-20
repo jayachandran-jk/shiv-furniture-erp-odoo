@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import java.util.HashSet;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -87,7 +88,7 @@ public class StockLedgerService {
                 public void afterCommit() {
                     CompletableFuture.runAsync(() -> {
                         try {
-                            procurementService.checkAndTriggerProcurement(productId);
+                            procurementService.checkAndTriggerProcurement(productId, movementType, referenceId, null, new HashSet<>(), 0);
                         } catch (Exception e) {
                             // log error or ignore
                         }
@@ -97,7 +98,7 @@ public class StockLedgerService {
         } else {
             CompletableFuture.runAsync(() -> {
                 try {
-                    procurementService.checkAndTriggerProcurement(productId);
+                    procurementService.checkAndTriggerProcurement(productId, movementType, referenceId, null, new HashSet<>(), 0);
                 } catch (Exception e) {
                     // log error or ignore
                 }

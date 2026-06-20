@@ -107,53 +107,53 @@ public class DatabaseSeeder implements CommandLineRunner {
         productRepository.saveAll(List.of(pW1, pW2, pW3, pW4, pW5, pF1, pF2, pF3, pF4));
 
         // 6. BoMs
-        BoM bom1 = BoM.builder().id("bom-1").productId("p-f1").build();
+        BoM bom1 = BoM.builder().id("bom-1").bomReference("BOM-000001").productId("p-f1").qtyProduced(1.0).version(1).isActive(true).build();
         bom1.setComponents(List.of(
-                BomComponent.builder().bomId("bom-1").productId("p-w1").qty(3).build(),
-                BomComponent.builder().bomId("bom-1").productId("p-w5").qty(4).build(),
-                BomComponent.builder().bomId("bom-1").productId("p-w3").qty(1).build(),
-                BomComponent.builder().bomId("bom-1").productId("p-w4").qty(1).build()
+                BomComponent.builder().id("bc-1").bomId("bom-1").productId("p-w1").qty(3.0).unitOfMeasure("pcs").build(),
+                BomComponent.builder().id("bc-2").bomId("bom-1").productId("p-w5").qty(4.0).unitOfMeasure("pcs").build(),
+                BomComponent.builder().id("bc-3").bomId("bom-1").productId("p-w3").qty(1.0).unitOfMeasure("pcs").build(),
+                BomComponent.builder().id("bc-4").bomId("bom-1").productId("p-w4").qty(1.0).unitOfMeasure("pcs").build()
         ));
         bom1.setOperations(List.of(
-                BomOperation.builder().id("op-1").bomId("bom-1").name("Cut planks to size").workCenterId("wc-1").durationMinutes(90).build(),
-                BomOperation.builder().id("op-2").bomId("bom-1").name("Sand all surfaces").workCenterId("wc-3").durationMinutes(60).build(),
-                BomOperation.builder().id("op-3").bomId("bom-1").name("Assemble table").workCenterId("wc-2").durationMinutes(120).build(),
-                BomOperation.builder().id("op-4").bomId("bom-1").name("Apply walnut finish").workCenterId("wc-4").durationMinutes(150).build()
+                BomOperation.builder().id("op-1").bomId("bom-1").sequence(10).name("Cut planks to size").workCenterId("wc-1").durationMinutes(90).build(),
+                BomOperation.builder().id("op-2").bomId("bom-1").sequence(20).name("Sand all surfaces").workCenterId("wc-3").durationMinutes(60).build(),
+                BomOperation.builder().id("op-3").bomId("bom-1").sequence(30).name("Assemble table").workCenterId("wc-2").durationMinutes(120).build(),
+                BomOperation.builder().id("op-4").bomId("bom-1").sequence(40).name("Apply walnut finish").workCenterId("wc-4").durationMinutes(150).build()
         ));
 
-        BoM bom2 = BoM.builder().id("bom-2").productId("p-f2").build();
+        BoM bom2 = BoM.builder().id("bom-2").bomReference("BOM-000002").productId("p-f2").qtyProduced(1.0).version(1).isActive(true).build();
         bom2.setComponents(List.of(
-                BomComponent.builder().bomId("bom-2").productId("p-w2").qty(1).build(),
-                BomComponent.builder().bomId("bom-2").productId("p-w5").qty(4).build(),
-                BomComponent.builder().bomId("bom-2").productId("p-w3").qty(1).build()
+                BomComponent.builder().id("bc-5").bomId("bom-2").productId("p-w2").qty(1.0).unitOfMeasure("pcs").build(),
+                BomComponent.builder().id("bc-6").bomId("bom-2").productId("p-w5").qty(4.0).unitOfMeasure("pcs").build(),
+                BomComponent.builder().id("bc-7").bomId("bom-2").productId("p-w3").qty(1.0).unitOfMeasure("pcs").build()
         ));
         bom2.setOperations(List.of(
-                BomOperation.builder().id("op-5").bomId("bom-2").name("Cut chair parts").workCenterId("wc-1").durationMinutes(45).build(),
-                BomOperation.builder().id("op-6").bomId("bom-2").name("Assemble chair").workCenterId("wc-2").durationMinutes(75).build(),
-                BomOperation.builder().id("op-7").bomId("bom-2").name("Polish").workCenterId("wc-4").durationMinutes(90).build()
+                BomOperation.builder().id("op-5").bomId("bom-2").sequence(10).name("Cut chair parts").workCenterId("wc-1").durationMinutes(45).build(),
+                BomOperation.builder().id("op-6").bomId("bom-2").sequence(20).name("Assemble chair").workCenterId("wc-2").durationMinutes(75).build(),
+                BomOperation.builder().id("op-7").bomId("bom-2").sequence(30).name("Polish").workCenterId("wc-4").durationMinutes(90).build()
         ));
 
-        BoM bom3 = BoM.builder().id("bom-3").productId("p-f3").build();
+        BoM bom3 = BoM.builder().id("bom-3").bomReference("BOM-000003").productId("p-f3").qtyProduced(1.0).version(1).isActive(true).build();
         bom3.setComponents(List.of(
-                BomComponent.builder().bomId("bom-3").productId("p-w2").qty(2).build(),
-                BomComponent.builder().bomId("bom-3").productId("p-w3").qty(1).build(),
-                BomComponent.builder().bomId("bom-3").productId("p-w4").qty(1).build()
+                BomComponent.builder().id("bc-8").bomId("bom-3").productId("p-w2").qty(2.0).unitOfMeasure("pcs").build(),
+                BomComponent.builder().id("bc-9").bomId("bom-3").productId("p-w3").qty(1.0).unitOfMeasure("pcs").build(),
+                BomComponent.builder().id("bc-10").bomId("bom-3").productId("p-w4").qty(1.0).unitOfMeasure("pcs").build()
         ));
         bom3.setOperations(List.of(
-                BomOperation.builder().id("op-8").bomId("bom-3").name("Cut shelves").workCenterId("wc-1").durationMinutes(60).build(),
-                BomOperation.builder().id("op-9").bomId("bom-3").name("Assemble shelf frame").workCenterId("wc-2").durationMinutes(100).build(),
-                BomOperation.builder().id("op-10").bomId("bom-3").name("Finish coat").workCenterId("wc-4").durationMinutes(120).build()
+                BomOperation.builder().id("op-8").bomId("bom-3").sequence(10).name("Cut shelves").workCenterId("wc-1").durationMinutes(60).build(),
+                BomOperation.builder().id("op-9").bomId("bom-3").sequence(20).name("Assemble shelf frame").workCenterId("wc-2").durationMinutes(100).build(),
+                BomOperation.builder().id("op-10").bomId("bom-3").sequence(30).name("Finish coat").workCenterId("wc-4").durationMinutes(120).build()
         ));
 
-        BoM bom4 = BoM.builder().id("bom-4").productId("p-f4").build();
+        BoM bom4 = BoM.builder().id("bom-4").bomReference("BOM-000004").productId("p-f4").qtyProduced(1.0).version(1).isActive(true).build();
         bom4.setComponents(List.of(
-                BomComponent.builder().bomId("bom-4").productId("p-w2").qty(1).build(),
-                BomComponent.builder().bomId("bom-4").productId("p-w5").qty(4).build(),
-                BomComponent.builder().bomId("bom-4").productId("p-w3").qty(1).build()
+                BomComponent.builder().id("bc-11").bomId("bom-4").productId("p-w2").qty(1.0).unitOfMeasure("pcs").build(),
+                BomComponent.builder().id("bc-12").bomId("bom-4").productId("p-w5").qty(4.0).unitOfMeasure("pcs").build(),
+                BomComponent.builder().id("bc-13").bomId("bom-4").productId("p-w3").qty(1.0).unitOfMeasure("pcs").build()
         ));
         bom4.setOperations(List.of(
-                BomOperation.builder().id("op-11").bomId("bom-4").name("Cut desk panels").workCenterId("wc-1").durationMinutes(50).build(),
-                BomOperation.builder().id("op-12").bomId("bom-4").name("Assemble desk").workCenterId("wc-2").durationMinutes(80).build()
+                BomOperation.builder().id("op-11").bomId("bom-4").sequence(10).name("Cut desk panels").workCenterId("wc-1").durationMinutes(50).build(),
+                BomOperation.builder().id("op-12").bomId("bom-4").sequence(20).name("Assemble desk").workCenterId("wc-2").durationMinutes(80).build()
         ));
 
         bomRepository.saveAll(List.of(bom1, bom2, bom3, bom4));

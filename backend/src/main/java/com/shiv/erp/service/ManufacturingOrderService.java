@@ -23,6 +23,8 @@ public class ManufacturingOrderService {
     private final ProcurementService procurementService;
     private final AuditLogService auditLogService;
     private final WorkOrderRepository workOrderRepository;
+    private final NotificationService notificationService;
+    private final SalesOrderRepository salesOrderRepository;
 
     public ManufacturingOrderService(ManufacturingOrderRepository manufacturingOrderRepository,
                                      ProductRepository productRepository,
@@ -30,7 +32,9 @@ public class ManufacturingOrderService {
                                      StockLedgerService stockLedgerService,
                                      ProcurementService procurementService,
                                      AuditLogService auditLogService,
-                                     WorkOrderRepository workOrderRepository) {
+                                     WorkOrderRepository workOrderRepository,
+                                     NotificationService notificationService,
+                                     SalesOrderRepository salesOrderRepository) {
         this.manufacturingOrderRepository = manufacturingOrderRepository;
         this.productRepository = productRepository;
         this.bomRepository = bomRepository;
@@ -38,6 +42,8 @@ public class ManufacturingOrderService {
         this.procurementService = procurementService;
         this.auditLogService = auditLogService;
         this.workOrderRepository = workOrderRepository;
+        this.notificationService = notificationService;
+        this.salesOrderRepository = salesOrderRepository;
     }
 
     @Transactional
@@ -54,16 +60,17 @@ public class ManufacturingOrderService {
         if (draft.getComponents() == null || draft.getComponents().isEmpty() ||
             draft.getWorkOrders() == null || draft.getWorkOrders().isEmpty()) {
 
-            BoM bom = bomRepository.findByProductId(draft.getProductId()).orElse(null);
+            BoM bom = bomRepository.findByProductIdAndIsActiveTrue(draft.getProductId()).orElse(null);
             if (bom != null) {
                 if (draft.getComponents() == null || draft.getComponents().isEmpty()) {
                     List<MoComponent> moComponents = new ArrayList<>();
                     for (BomComponent bc : bom.getComponents()) {
+                        int reqQty = (int) (bc.getQty() * draft.getQty());
                         moComponents.add(MoComponent.builder()
                                 .moId(moId)
                                 .productId(bc.getProductId())
-                                .requiredQty(bc.getQty() * draft.getQty())
-                                .toConsumeQty(bc.getQty() * draft.getQty())
+                                .requiredQty(reqQty)
+                                .toConsumeQty(reqQty)
                                 .consumedQty(0)
                                 .build());
                     }
@@ -281,6 +288,32 @@ public class ManufacturingOrderService {
         String oldStatus = mo.getStatus();
         mo.setStatus("Done");
         ManufacturingOrder saved = manufacturingOrderRepository.save(mo);
+
+        // Notify assignee, inventory managers, and admins
+        notificationService.notifyUserOrRoles(
+                saved.getAssigneeId(),
+                List.of("inventory", "admin"),
+                "Manufacturing Order Done",
+                String.format("Manufacturing Order %s for %s has been completed.", saved.getNumber(), saved.getProductId()),
+                "MANUFACTURING_ORDER",
+                saved.getId()
+        );
+
+        // Notify sales rep if linked to a Sales Order
+        if (saved.getTriggeringSalesOrderId() != null && !saved.getTriggeringSalesOrderId().isEmpty()) {
+            salesOrderRepository.findById(saved.getTriggeringSalesOrderId()).ifPresent(so -> {
+                String repId = so.getCreatedBy();
+                if (repId != null && !repId.isEmpty()) {
+                    notificationService.createNotification(
+                            repId,
+                            "MTO Stock Available",
+                            String.format("Shortage resolved for Sales Order %s. Link stock is now available for delivery.", so.getNumber()),
+                            "SALES_ORDER",
+                            so.getId()
+                    );
+                }
+            });
+        }
 
         auditLogService.logChange(
                 userId,

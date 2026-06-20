@@ -24,10 +24,12 @@ public class PurchaseOrderController {
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN','PURCHASE','OWNER')")
-    public ResponseEntity<List<PurchaseOrder>> getAllOrders() {
-        List<PurchaseOrder> orders = purchaseOrderRepository.findAll();
-        // Sort by date descending
-        orders.sort((a, b) -> b.getDate() == null ? 0 : b.getDate().compareTo(a.getDate() == null ? b.getDate() : a.getDate()));
+    public ResponseEntity<List<PurchaseOrder>> getFilteredOrders(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String vendorId,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo) {
+        List<PurchaseOrder> orders = purchaseOrderService.getFilteredOrders(status, vendorId, dateFrom, dateTo);
         return ResponseEntity.ok(orders);
     }
 
@@ -54,7 +56,31 @@ public class PurchaseOrderController {
         }
     }
 
-    @PatchMapping("/{id}/confirm")
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','PURCHASE')")
+    public ResponseEntity<?> updateOrder(@PathVariable String id, @RequestBody PurchaseOrder order) {
+        try {
+            PurchaseOrder updated = purchaseOrderService.updateOrder(id, order);
+            return ResponseEntity.ok(updated);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/{id}/book")
+    @PreAuthorize("hasAnyRole('ADMIN','PURCHASE')")
+    public ResponseEntity<?> bookOrder(@PathVariable String id) {
+        try {
+            PurchaseOrder booked = purchaseOrderService.bookOrder(id);
+            return ResponseEntity.ok(booked);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/{id}/confirm")
     @PreAuthorize("hasAnyRole('ADMIN','PURCHASE')")
     public ResponseEntity<?> confirmOrder(@PathVariable String id) {
         try {
@@ -66,9 +92,38 @@ public class PurchaseOrderController {
         }
     }
 
+    @PatchMapping("/{id}/confirm")
+    @PreAuthorize("hasAnyRole('ADMIN','PURCHASE')")
+    public ResponseEntity<?> confirmOrderPatch(@PathVariable String id) {
+        return confirmOrder(id);
+    }
+
+    @PostMapping("/{id}/receive")
+    @PreAuthorize("hasAnyRole('ADMIN','PURCHASE')")
+    public ResponseEntity<?> receiveOrder(@PathVariable String id, @RequestBody List<Map<String, Object>> receiptsList) {
+        try {
+            Map<String, Integer> receipts = new java.util.HashMap<>();
+            for (Map<String, Object> item : receiptsList) {
+                String lineId = (String) item.get("lineId");
+                Number receivedQty = (Number) item.get("receivedQty");
+                if (receivedQty == null) {
+                    receivedQty = (Number) item.get("qty");
+                }
+                if (lineId != null && receivedQty != null) {
+                    receipts.put(lineId, receivedQty.intValue());
+                }
+            }
+            PurchaseOrder received = purchaseOrderService.receiveOrder(id, receipts);
+            return ResponseEntity.ok(received);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @PatchMapping("/{id}/receive")
     @PreAuthorize("hasAnyRole('ADMIN','PURCHASE')")
-    public ResponseEntity<?> receiveOrder(@PathVariable String id, @RequestBody Map<String, Integer> receipts) {
+    public ResponseEntity<?> receiveOrderPatch(@PathVariable String id, @RequestBody Map<String, Integer> receipts) {
         try {
             PurchaseOrder received = purchaseOrderService.receiveOrder(id, receipts);
             return ResponseEntity.ok(received);
@@ -78,7 +133,7 @@ public class PurchaseOrderController {
         }
     }
 
-    @PatchMapping("/{id}/cancel")
+    @PostMapping("/{id}/cancel")
     @PreAuthorize("hasAnyRole('ADMIN','PURCHASE')")
     public ResponseEntity<?> cancelOrder(@PathVariable String id) {
         try {
@@ -88,5 +143,11 @@ public class PurchaseOrderController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("error", e.getMessage()));
         }
+    }
+
+    @PatchMapping("/{id}/cancel")
+    @PreAuthorize("hasAnyRole('ADMIN','PURCHASE')")
+    public ResponseEntity<?> cancelOrderPatch(@PathVariable String id) {
+        return cancelOrder(id);
     }
 }

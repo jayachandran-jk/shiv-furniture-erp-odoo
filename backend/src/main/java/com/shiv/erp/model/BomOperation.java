@@ -18,11 +18,17 @@ public class BomOperation {
     private String bomId;
 
     @Column(nullable = false)
-    private String name;
+    private Integer sequence;
+
+    @Column(name = "operation_name", nullable = false, length = 100)
+    private String name; // Map name field to operation_name column for compatibility
 
     @Column(name = "work_center_id", length = 50)
     private String workCenterId;
 
     @Column(name = "duration_minutes", nullable = false)
     private Integer durationMinutes;
+
+    @Column(length = 255)
+    private String notes;
 }

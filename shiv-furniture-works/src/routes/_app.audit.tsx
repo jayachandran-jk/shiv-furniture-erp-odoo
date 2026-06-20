@@ -1,88 +1,400 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useERP } from "@/lib/erp/store";
-import { Select, Input } from "@/components/erp/ui";
 import { EmptyState } from "@/components/erp/StatusBadge";
 import { format } from "date-fns";
-import { ChevronRight, ChevronDown } from "lucide-react";
+import { Filter, RotateCcw, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { useEffect } from "react";
+import type { AuditEntry } from "@/lib/erp/types";
 
 export const Route = createFileRoute("/_app/audit")({
-  head: () => ({ meta: [{ title: "Audit log — Shiv Furniture Works" }] }),
+  head: () => ({ meta: [{ title: "Audit Logs — Shiv Furniture Works" }] }),
   component: AuditPage,
 });
 
-function AuditPage() {
-  const { audit, users } = useERP();
-  const [type, setType] = useState("");
-  const [from, setFrom] = useState("");
-  const [open, setOpen] = useState<Record<string, boolean>>({});
-  const userName = (id: string) => users.find(u => u.id === id)?.name || id;
+const PAGE_SIZE = 20;
 
-  const entityTypes = Array.from(new Set(audit.map(a => a.recordType)));
-  const filtered = useMemo(() => audit.filter(a => {
-    if (type && a.recordType !== type) return false;
-    if (from && new Date(a.ts) < new Date(from)) return false;
-    return true;
-  }), [audit, type, from]);
+/* ─────────────── helpers ─────────────── */
+
+function parseNumeric(s?: string | null): number | null {
+  if (!s) return null;
+  const cleaned = s.replace(/[₹,]/g, "").trim();
+  const n = parseFloat(cleaned);
+  return isNaN(n) ? null : n;
+}
+
+function ActionBadge({ action }: { action: string }) {
+  const lower = action.toLowerCase();
+  let cls = "bg-gray-50 text-gray-700 border-gray-200";
+  if (lower.includes("creat")) cls = "bg-green-50 text-green-700 border-green-200";
+  else if (lower.includes("updat") || lower.includes("confirm") || lower.includes("book") || lower.includes("receiv") || lower.includes("complet") || lower.includes("status")) cls = "bg-amber-50 text-amber-700 border-amber-200";
+  else if (lower.includes("delet") || lower.includes("cancel")) cls = "bg-red-50 text-red-700 border-red-200";
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <Select value={type} onChange={e => setType(e.target.value)} className="w-56">
-          <option value="">All entity types</option>
-          {entityTypes.map(t => <option key={t} value={t}>{t}</option>)}
-        </Select>
-        <Input type="date" value={from} onChange={e => setFrom(e.target.value)} className="w-44" />
-        <span className="text-xs text-muted-foreground">{filtered.length} entries</span>
+    <span className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full font-medium border ${cls}`}>
+      {action}
+    </span>
+  );
+}
+
+/* ─────────────── main page ─────────────── */
+
+function AuditPage() {
+  const { users } = useERP();
+
+  // filter state
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [userFilter, setUserFilter] = useState("");
+  const [moduleFilter, setModuleFilter] = useState("");
+  const [actionFilter, setActionFilter] = useState("");
+  const [page, setPage] = useState(1);
+
+  // applied filters (only apply on Filter button click)
+  const [applied, setApplied] = useState({ dateFrom: "", dateTo: "", user: "", module: "", action: "" });
+
+  const userName = (id: string) => users.find(u => u.id === id)?.name || id;
+
+  const allModules = ["Sales", "Purchase", "Manufacturing", "Products", "Inventory"];
+
+  // Server state
+  const [kpis, setKpis] = useState({ total: 0, creates: 0, updates: 0, deletes: 0 });
+  const [pageRows, setPageRows] = useState<AuditEntry[]>([]);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalElements, setTotalElements] = useState(0);
+
+  // Fetch summary on load
+  useEffect(() => {
+    const fetchSummary = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const headers: HeadersInit = { "Content-Type": "application/json" };
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+        const response = await fetch(`http://localhost:4000/api/audit-logs/summary`, { headers });
+        if (response.ok) {
+          const data = await response.json();
+          setKpis({
+            total: data.totalLogs || 0,
+            creates: data.createCount || 0,
+            updates: data.updateCount || 0,
+            deletes: data.deleteCount || 0
+          });
+        }
+      } catch (err) {
+        console.error("Failed to fetch audit log summary", err);
+      }
+    };
+    fetchSummary();
+  }, []);
+
+  // Fetch paginated data
+  useEffect(() => {
+    const fetchPage = async () => {
+      try {
+        const params = new URLSearchParams();
+        params.append("page", page.toString());
+        params.append("size", PAGE_SIZE.toString());
+        if (applied.dateFrom) params.append("from", applied.dateFrom);
+        if (applied.dateTo) params.append("to", applied.dateTo);
+        if (applied.user) params.append("user", applied.user);
+        if (applied.module) params.append("module", applied.module);
+        if (applied.action) params.append("action", applied.action);
+
+        const token = localStorage.getItem("token");
+        const headers: HeadersInit = { "Content-Type": "application/json" };
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+        
+        const response = await fetch(`http://localhost:4000/api/audit-logs?${params.toString()}`, { headers });
+        if (response.ok) {
+          const data = await response.json();
+          // Map backend AuditLog to frontend AuditEntry format
+          const mappedLogs = (data.content || []).map((a: any) => {
+            let mod = "System";
+            const et = a.entityType;
+            if (et === "Product") mod = "Products";
+            else if (et === "SalesOrder") mod = "Sales";
+            else if (et === "PurchaseOrder") mod = "Purchase";
+            else if (et === "ManufacturingOrder") mod = "Manufacturing";
+            else if (et === "User") mod = "Settings";
+            else if (et === "BoM") mod = "BillOfMaterials";
+
+            const cleanJsonString = (s: string) => {
+              if (!s) return s;
+              if (s.startsWith("\"") && s.endsWith("\"")) return s.slice(1, -1);
+              return s;
+            };
+
+            return {
+              id: a.id,
+              ts: a.ts || new Date().toISOString(),
+              userId: a.userId || "system",
+              module: mod,
+              recordType: a.entityType,
+              recordId: a.entityId,
+              action: a.action,
+              oldValue: cleanJsonString(a.oldValue),
+              newValue: cleanJsonString(a.newValue),
+            };
+          });
+          setPageRows(mappedLogs);
+          setTotalPages(data.totalPages || 1);
+          setTotalElements(data.totalElements || 0);
+        }
+      } catch (err) {
+        console.error("Failed to fetch audit logs", err);
+      }
+    };
+    fetchPage();
+  }, [page, applied]);
+
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * PAGE_SIZE;
+  const pageEnd = Math.min(pageStart + PAGE_SIZE, totalElements);
+
+  const handleFilter = () => {
+    setApplied({ dateFrom, dateTo, user: userFilter, module: moduleFilter, action: actionFilter });
+    setPage(1);
+  };
+
+  const handleReset = () => {
+    setDateFrom(""); setDateTo(""); setUserFilter(""); setModuleFilter(""); setActionFilter("");
+    setApplied({ dateFrom: "", dateTo: "", user: "", module: "", action: "" });
+    setPage(1);
+  };
+
+  // generate page numbers for pagination
+  const pageNumbers = useMemo(() => {
+    const pages: (number | "...")[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (currentPage > 3) pages.push("...");
+      const start = Math.max(2, currentPage - 1);
+      const end = Math.min(totalPages - 1, currentPage + 1);
+      for (let i = start; i <= end; i++) pages.push(i);
+      if (currentPage < totalPages - 2) pages.push("...");
+      pages.push(totalPages);
+    }
+    return pages;
+  }, [totalPages, currentPage]);
+
+  return (
+    <div className="space-y-5">
+      {/* ── SECTION 1: KPI Cards ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiCard label="Total Logs" value={kpis.total} sub="All time logs" borderColor="#7C5C3E" />
+        <KpiCard label="Create Actions" value={kpis.creates} sub="Records Created" borderColor="#22c55e" />
+        <KpiCard label="Update Actions" value={kpis.updates} sub="Records Updated" borderColor="#f59e0b" />
+        <KpiCard label="Delete Actions" value={kpis.deletes} sub="Records Deleted" borderColor="#ef4444" />
       </div>
 
-      {filtered.length === 0 ? (
+      {/* ── SECTION 2: Filter Bar ── */}
+      <div className="flex flex-wrap items-end gap-3 rounded-lg border border-gray-200 bg-white p-4">
+        <FilterField label="Date Range">
+          <div className="flex items-center gap-1.5">
+            <div className="relative">
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={e => setDateFrom(e.target.value)}
+                className="h-[38px] w-[140px] rounded-md border border-gray-200 bg-white px-2.5 pr-8 text-sm text-[#2B2622] focus:outline-none focus:ring-1 focus:ring-[#7C5C3E]"
+              />
+              <Calendar className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+            </div>
+            <span className="text-xs text-gray-400">–</span>
+            <div className="relative">
+              <input
+                type="date"
+                value={dateTo}
+                onChange={e => setDateTo(e.target.value)}
+                className="h-[38px] w-[140px] rounded-md border border-gray-200 bg-white px-2.5 pr-8 text-sm text-[#2B2622] focus:outline-none focus:ring-1 focus:ring-[#7C5C3E]"
+              />
+              <Calendar className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+            </div>
+          </div>
+        </FilterField>
+        <FilterField label="User">
+          <select
+            value={userFilter}
+            onChange={e => setUserFilter(e.target.value)}
+            className="h-[38px] w-[160px] rounded-md border border-gray-200 bg-white px-2 text-sm text-[#2B2622] focus:outline-none focus:ring-1 focus:ring-[#7C5C3E]"
+          >
+            <option value="">All Users</option>
+            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </select>
+        </FilterField>
+        <FilterField label="Module">
+          <select
+            value={moduleFilter}
+            onChange={e => setModuleFilter(e.target.value)}
+            className="h-[38px] w-[160px] rounded-md border border-gray-200 bg-white px-2 text-sm text-[#2B2622] focus:outline-none focus:ring-1 focus:ring-[#7C5C3E]"
+          >
+            <option value="">All Modules</option>
+            {allModules.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </FilterField>
+        <FilterField label="Actions">
+          <select
+            value={actionFilter}
+            onChange={e => setActionFilter(e.target.value)}
+            className="h-[38px] w-[160px] rounded-md border border-gray-200 bg-white px-2 text-sm text-[#2B2622] focus:outline-none focus:ring-1 focus:ring-[#7C5C3E]"
+          >
+            <option value="">All Actions</option>
+            <option value="Created">Created</option>
+            <option value="Updated">Updated</option>
+            <option value="Deleted">Deleted</option>
+          </select>
+        </FilterField>
+
+        <button
+          onClick={handleFilter}
+          className="inline-flex h-[38px] items-center gap-1.5 rounded-md bg-[#7C5C3E] px-4 text-sm font-medium text-white hover:bg-[#6a4e34] transition-colors"
+        >
+          <Filter className="h-3.5 w-3.5" />
+          Filter
+        </button>
+        <button
+          onClick={handleReset}
+          className="inline-flex h-[38px] items-center gap-1.5 rounded-md border border-gray-300 px-4 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+          Reset
+        </button>
+      </div>
+
+      {/* ── SECTION 3: Audit Log Table ── */}
+      {totalElements === 0 ? (
         <EmptyState title="No audit entries match" hint="System actions write to this log automatically." />
       ) : (
-        <div className="rounded-lg border bg-card">
-          <div className="relative border-l-2 border-border ml-4 my-3">
-            {filtered.map(a => {
-              const isOpen = open[a.id];
-              const hasDiff = !!(a.field || a.oldValue !== undefined || a.newValue !== undefined);
-              return (
-                <div key={a.id} className="border-b border-border/50 last:border-b-0">
+        <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-[#FAF8F5] text-left">
+                  <th className="px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide w-44">Date & Time</th>
+                  <th className="px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide w-32">User</th>
+                  <th className="px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide w-28">Module</th>
+                  <th className="px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide w-40">Record Type</th>
+                  <th className="px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide w-32">Record ID</th>
+                  <th className="px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide w-24">Action</th>
+                  <th className="px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide w-32">Field Changed</th>
+                  <th className="px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide w-24">Old Value</th>
+                  <th className="px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide w-24">New Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pageRows.map(a => {
+                  const isCreatedOrDeleted = a.action.toLowerCase().includes("creat") || a.action.toLowerCase().includes("delet") || a.action.toLowerCase().includes("cancel");
+                  const oldNum = parseNumeric(a.oldValue);
+                  const newNum = parseNumeric(a.newValue);
+                  let newValueColor = "text-[#2B2622]";
+                  if (oldNum !== null && newNum !== null) {
+                    if (newNum > oldNum) newValueColor = "text-green-600";
+                    else if (newNum < oldNum) newValueColor = "text-red-600";
+                  }
+
+                  return (
+                    <tr key={a.id} className="border-b border-gray-100 hover:bg-[#FAF8F5] transition-colors">
+                      <td className="px-3 py-2.5 text-sm text-[#2B2622]">
+                        {format(new Date(a.ts), "dd MMM yyyy, hh:mm a")}
+                      </td>
+                      <td className="px-3 py-2.5 text-sm text-[#2B2622]">
+                        {userName(a.userId)}
+                      </td>
+                      <td className="px-3 py-2.5 text-sm text-[#2B2622]">
+                        {a.module}
+                      </td>
+                      <td className="px-3 py-2.5 text-sm text-[#2B2622]">
+                        {a.recordType}
+                      </td>
+                      <td className="px-3 py-2.5 font-mono text-xs text-[#2B2622]">
+                        {a.recordId}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <ActionBadge action={a.action} />
+                      </td>
+                      <td className="px-3 py-2.5 text-sm text-[#2B2622]">
+                        {isCreatedOrDeleted ? <span className="text-gray-300">—</span> : (a.field || <span className="text-gray-300">—</span>)}
+                      </td>
+                      <td className="px-3 py-2.5 text-sm text-[#2B2622]">
+                        {isCreatedOrDeleted || !a.oldValue ? <span className="text-gray-300">—</span> : a.oldValue}
+                      </td>
+                      <td className={`px-3 py-2.5 text-sm ${isCreatedOrDeleted || !a.newValue ? "" : newValueColor}`}>
+                        {isCreatedOrDeleted || !a.newValue ? <span className="text-gray-300">—</span> : a.newValue}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* ── SECTION 4: Pagination ── */}
+          <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3">
+            <span className="text-xs text-gray-400">
+              Showing {totalElements === 0 ? 0 : pageStart + 1}–{pageEnd} of {totalElements} results
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                disabled={currentPage <= 1}
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                className="inline-flex h-8 w-8 items-center justify-center rounded border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              {pageNumbers.map((pn, i) =>
+                pn === "..." ? (
+                  <span key={`dots-${i}`} className="px-2 text-sm text-gray-400">…</span>
+                ) : (
                   <button
-                    onClick={() => setOpen(o => ({ ...o, [a.id]: !o[a.id] }))}
-                    className="group relative grid w-full grid-cols-12 items-center gap-3 px-4 py-2 text-left -ml-px hover:bg-muted/40"
+                    key={pn}
+                    onClick={() => setPage(pn as number)}
+                    className={`inline-flex h-8 w-8 items-center justify-center rounded text-sm font-medium transition-colors ${
+                      pn === currentPage
+                        ? "bg-[#7C5C3E] text-white"
+                        : "border border-gray-200 text-gray-600 hover:bg-gray-50"
+                    }`}
                   >
-                    <span className="absolute -left-[5px] top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-accent" />
-                    <div className="col-span-3 font-mono tabular text-[11px] text-muted-foreground">
-                      {format(new Date(a.ts), "dd MMM yyyy HH:mm:ss")}
-                    </div>
-                    <div className="col-span-2">
-                      <span className="rounded-md border border-border bg-muted px-1.5 py-0.5 text-[11px] font-medium">{a.module}</span>
-                    </div>
-                    <div className="col-span-3 truncate">
-                      <span className="font-medium">{a.action}</span>
-                      <span className="ml-2 text-xs text-muted-foreground">{a.recordType}</span>
-                    </div>
-                    <div className="col-span-3 truncate text-xs text-muted-foreground">by {userName(a.userId)}</div>
-                    <div className="col-span-1 text-right text-muted-foreground">
-                      {hasDiff && (isOpen ? <ChevronDown className="h-3.5 w-3.5 inline" /> : <ChevronRight className="h-3.5 w-3.5 inline" />)}
-                    </div>
+                    {pn}
                   </button>
-                  {isOpen && hasDiff && (
-                    <div className="bg-muted/30 px-6 py-2 text-xs">
-                      <div className="mb-1 text-muted-foreground">Record: <span className="font-mono">{a.recordId}</span></div>
-                      {a.field && <div className="mb-1">Field: <span className="font-mono">{a.field}</span></div>}
-                      <div className="flex items-center gap-2">
-                        <span className="rounded-md border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 font-mono text-destructive">{a.oldValue ?? "—"}</span>
-                        <span className="text-muted-foreground">→</span>
-                        <span className="rounded-md border border-success/30 bg-success/15 px-1.5 py-0.5 font-mono text-success">{a.newValue ?? "—"}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                )
+              )}
+              <button
+                disabled={currentPage >= totalPages}
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                className="inline-flex h-8 w-8 items-center justify-center rounded border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ─────────────── subcomponents ─────────────── */
+
+function KpiCard({ label, value, sub, borderColor }: { label: string; value: number; sub: string; borderColor: string }) {
+  return (
+    <div
+      className="rounded-lg border border-gray-200 bg-white p-4 border-l-4"
+      style={{ borderLeftColor: borderColor }}
+    >
+      <div className="text-sm font-medium text-[#7C5C3E]">{label}</div>
+      <div className="mt-1 text-3xl font-bold text-[#2B2622]">{value.toLocaleString("en-IN")}</div>
+      <div className="mt-0.5 text-xs text-gray-400">{sub}</div>
+    </div>
+  );
+}
+
+function FilterField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-xs text-gray-500">{label}</span>
+      {children}
     </div>
   );
 }

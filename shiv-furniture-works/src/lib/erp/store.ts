@@ -46,10 +46,13 @@ interface State {
   cancelSalesOrder: (id: string) => Promise<void>;
 
   // purchase
-  createPurchaseOrder: (po: { vendorId: string; lines: Array<{ productId: string; qty: number; unitPrice: number }> }) => Promise<PurchaseOrder>;
+  createPurchaseOrder: (po: { vendorId: string; expectedDeliveryDate?: string; notes?: string; lines: Array<{ productId: string; qty: number; unitPrice: number }> }) => Promise<PurchaseOrder>;
+  updatePurchaseOrder: (id: string, po: { vendorId: string; expectedDeliveryDate?: string; notes?: string; lines: Array<{ productId: string; qty: number; unitPrice: number }> }) => Promise<PurchaseOrder>;
+  bookPurchaseOrder: (id: string) => Promise<void>;
   confirmPurchaseOrder: (id: string) => Promise<void>;
   receivePurchaseOrder: (id: string, receipts: { lineId: string; qty: number }[]) => Promise<void>;
   cancelPurchaseOrder: (id: string) => Promise<void>;
+  createVendor: (vendor: Omit<Vendor, "id">) => Promise<Vendor>;
 
   // manufacturing
   createManufacturingOrder: (productId: string, qty: number, assigneeId?: string, triggeringSO?: string) => Promise<ManufacturingOrder | null>;
@@ -60,6 +63,8 @@ interface State {
 
   // bom
   upsertBom: (bom: BoM) => Promise<void>;
+  deactivateBom: (id: string) => Promise<void>;
+  createWorkCenter: (wc: { name: string; description?: string; capacityPerDay?: number }) => Promise<WorkCenter>;
   refreshData: () => Promise<void>;
 }
 
@@ -324,6 +329,8 @@ export const useERP = create<State>()(
             number: po.number,
             vendorId: po.vendorId,
             date: po.date || new Date().toISOString(),
+            expectedDeliveryDate: po.expectedDeliveryDate,
+            notes: po.notes,
             status: po.status,
             createdBy: po.createdBy || "system",
             lines: (po.lines || []).map((l: any) => ({
@@ -339,7 +346,8 @@ export const useERP = create<State>()(
 
           const mappedManufacturingOrders = (manufacturingOrders || []).map(mapManufacturingOrder);
           const mappedLedger = (ledger || []).map(mapLedgerEntry);
-          const mappedAudit = (audit || []).map(mapAuditEntry);
+          const auditArray = Array.isArray(audit) ? audit : (audit?.content || []);
+          const mappedAudit = auditArray.map(mapAuditEntry);
 
           set({
             users: mappedUsers,
@@ -426,6 +434,8 @@ export const useERP = create<State>()(
       createPurchaseOrder: async (po) => {
         const order = await apiCall("/api/purchase-orders", "POST", {
           vendorId: po.vendorId,
+          expectedDeliveryDate: po.expectedDeliveryDate,
+          notes: po.notes,
           lines: po.lines.map(l => ({
             productId: l.productId,
             qty: l.qty,
@@ -436,23 +446,49 @@ export const useERP = create<State>()(
         return order;
       },
 
+      updatePurchaseOrder: async (id, po) => {
+        const order = await apiCall(`/api/purchase-orders/${id}`, "PUT", {
+          vendorId: po.vendorId,
+          expectedDeliveryDate: po.expectedDeliveryDate,
+          notes: po.notes,
+          lines: po.lines.map(l => ({
+            productId: l.productId,
+            qty: l.qty,
+            unitPrice: l.unitPrice,
+          })),
+        });
+        await get().refreshData();
+        return order;
+      },
+
+      bookPurchaseOrder: async (id) => {
+        await apiCall(`/api/purchase-orders/${id}/book`, "POST");
+        await get().refreshData();
+      },
+
       confirmPurchaseOrder: async (id) => {
-        await apiCall(`/api/purchase-orders/${id}/confirm`, "PATCH");
+        await apiCall(`/api/purchase-orders/${id}/confirm`, "POST");
         await get().refreshData();
       },
 
       receivePurchaseOrder: async (id, receipts) => {
-        const payload: Record<string, number> = {};
-        receipts.forEach(r => {
-          payload[r.lineId] = r.qty;
-        });
-        await apiCall(`/api/purchase-orders/${id}/receive`, "PATCH", payload);
+        const payload = receipts.map(r => ({
+          lineId: r.lineId,
+          receivedQty: r.qty,
+        }));
+        await apiCall(`/api/purchase-orders/${id}/receive`, "POST", payload);
         await get().refreshData();
       },
 
       cancelPurchaseOrder: async (id) => {
-        await apiCall(`/api/purchase-orders/${id}/cancel`, "PATCH");
+        await apiCall(`/api/purchase-orders/${id}/cancel`, "POST");
         await get().refreshData();
+      },
+
+      createVendor: async (vendor) => {
+        const saved = await apiCall("/api/vendors", "POST", vendor);
+        await get().refreshData();
+        return saved;
       },
 
       createManufacturingOrder: async (productId, qty, assigneeId, triggeringSO) => {
@@ -487,8 +523,23 @@ export const useERP = create<State>()(
       },
 
       upsertBom: async (bom) => {
-        await apiCall("/api/boms", "POST", bom);
+        if (bom.id && bom.id.startsWith("bom-") && !bom.id.includes("new")) {
+          await apiCall(`/api/boms/${bom.id}`, "PUT", bom);
+        } else {
+          await apiCall("/api/boms", "POST", bom);
+        }
         await get().refreshData();
+      },
+
+      deactivateBom: async (id) => {
+        await apiCall(`/api/boms/${id}/deactivate`, "POST");
+        await get().refreshData();
+      },
+
+      createWorkCenter: async (wc) => {
+        const res = await apiCall("/api/work-centers", "POST", wc);
+        await get().refreshData();
+        return res;
       },
     }),
     {

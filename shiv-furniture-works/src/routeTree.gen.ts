@@ -20,13 +20,17 @@ import { Route as AppManufacturingRouteImport } from './routes/_app.manufacturin
 import { Route as AppInventoryRouteImport } from './routes/_app.inventory'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppBomRouteImport } from './routes/_app.bom'
+import { Route as AppAutomationRouteImport } from './routes/_app.automation'
 import { Route as AppAuditRouteImport } from './routes/_app.audit'
 import { Route as AppSalesIndexRouteImport } from './routes/_app.sales.index'
 import { Route as AppPurchaseIndexRouteImport } from './routes/_app.purchase.index'
 import { Route as AppManufacturingIndexRouteImport } from './routes/_app.manufacturing.index'
+import { Route as AppBomIndexRouteImport } from './routes/_app.bom.index'
 import { Route as AppSalesIdRouteImport } from './routes/_app.sales.$id'
 import { Route as AppPurchaseIdRouteImport } from './routes/_app.purchase.$id'
 import { Route as AppManufacturingIdRouteImport } from './routes/_app.manufacturing.$id'
+import { Route as AppBomNewRouteImport } from './routes/_app.bom.new'
+import { Route as AppBomIdRouteImport } from './routes/_app.bom.$id'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -82,6 +86,11 @@ const AppBomRoute = AppBomRouteImport.update({
   path: '/bom',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAutomationRoute = AppAutomationRouteImport.update({
+  id: '/automation',
+  path: '/automation',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAuditRoute = AppAuditRouteImport.update({
   id: '/audit',
   path: '/audit',
@@ -102,6 +111,11 @@ const AppManufacturingIndexRoute = AppManufacturingIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppManufacturingRoute,
 } as any)
+const AppBomIndexRoute = AppBomIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppBomRoute,
+} as any)
 const AppSalesIdRoute = AppSalesIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -117,12 +131,23 @@ const AppManufacturingIdRoute = AppManufacturingIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AppManufacturingRoute,
 } as any)
+const AppBomNewRoute = AppBomNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AppBomRoute,
+} as any)
+const AppBomIdRoute = AppBomIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AppBomRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/audit': typeof AppAuditRoute
-  '/bom': typeof AppBomRoute
+  '/automation': typeof AppAutomationRoute
+  '/bom': typeof AppBomRouteWithChildren
   '/dashboard': typeof AppDashboardRoute
   '/inventory': typeof AppInventoryRoute
   '/manufacturing': typeof AppManufacturingRouteWithChildren
@@ -130,9 +155,12 @@ export interface FileRoutesByFullPath {
   '/purchase': typeof AppPurchaseRouteWithChildren
   '/sales': typeof AppSalesRouteWithChildren
   '/settings': typeof AppSettingsRoute
+  '/bom/$id': typeof AppBomIdRoute
+  '/bom/new': typeof AppBomNewRoute
   '/manufacturing/$id': typeof AppManufacturingIdRoute
   '/purchase/$id': typeof AppPurchaseIdRoute
   '/sales/$id': typeof AppSalesIdRoute
+  '/bom/': typeof AppBomIndexRoute
   '/manufacturing/': typeof AppManufacturingIndexRoute
   '/purchase/': typeof AppPurchaseIndexRoute
   '/sales/': typeof AppSalesIndexRoute
@@ -141,14 +169,17 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/audit': typeof AppAuditRoute
-  '/bom': typeof AppBomRoute
+  '/automation': typeof AppAutomationRoute
   '/dashboard': typeof AppDashboardRoute
   '/inventory': typeof AppInventoryRoute
   '/products': typeof AppProductsRoute
   '/settings': typeof AppSettingsRoute
+  '/bom/$id': typeof AppBomIdRoute
+  '/bom/new': typeof AppBomNewRoute
   '/manufacturing/$id': typeof AppManufacturingIdRoute
   '/purchase/$id': typeof AppPurchaseIdRoute
   '/sales/$id': typeof AppSalesIdRoute
+  '/bom': typeof AppBomIndexRoute
   '/manufacturing': typeof AppManufacturingIndexRoute
   '/purchase': typeof AppPurchaseIndexRoute
   '/sales': typeof AppSalesIndexRoute
@@ -159,7 +190,8 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/_app/audit': typeof AppAuditRoute
-  '/_app/bom': typeof AppBomRoute
+  '/_app/automation': typeof AppAutomationRoute
+  '/_app/bom': typeof AppBomRouteWithChildren
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/inventory': typeof AppInventoryRoute
   '/_app/manufacturing': typeof AppManufacturingRouteWithChildren
@@ -167,9 +199,12 @@ export interface FileRoutesById {
   '/_app/purchase': typeof AppPurchaseRouteWithChildren
   '/_app/sales': typeof AppSalesRouteWithChildren
   '/_app/settings': typeof AppSettingsRoute
+  '/_app/bom/$id': typeof AppBomIdRoute
+  '/_app/bom/new': typeof AppBomNewRoute
   '/_app/manufacturing/$id': typeof AppManufacturingIdRoute
   '/_app/purchase/$id': typeof AppPurchaseIdRoute
   '/_app/sales/$id': typeof AppSalesIdRoute
+  '/_app/bom/': typeof AppBomIndexRoute
   '/_app/manufacturing/': typeof AppManufacturingIndexRoute
   '/_app/purchase/': typeof AppPurchaseIndexRoute
   '/_app/sales/': typeof AppSalesIndexRoute
@@ -180,6 +215,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/audit'
+    | '/automation'
     | '/bom'
     | '/dashboard'
     | '/inventory'
@@ -188,9 +224,12 @@ export interface FileRouteTypes {
     | '/purchase'
     | '/sales'
     | '/settings'
+    | '/bom/$id'
+    | '/bom/new'
     | '/manufacturing/$id'
     | '/purchase/$id'
     | '/sales/$id'
+    | '/bom/'
     | '/manufacturing/'
     | '/purchase/'
     | '/sales/'
@@ -199,14 +238,17 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/audit'
-    | '/bom'
+    | '/automation'
     | '/dashboard'
     | '/inventory'
     | '/products'
     | '/settings'
+    | '/bom/$id'
+    | '/bom/new'
     | '/manufacturing/$id'
     | '/purchase/$id'
     | '/sales/$id'
+    | '/bom'
     | '/manufacturing'
     | '/purchase'
     | '/sales'
@@ -216,6 +258,7 @@ export interface FileRouteTypes {
     | '/_app'
     | '/login'
     | '/_app/audit'
+    | '/_app/automation'
     | '/_app/bom'
     | '/_app/dashboard'
     | '/_app/inventory'
@@ -224,9 +267,12 @@ export interface FileRouteTypes {
     | '/_app/purchase'
     | '/_app/sales'
     | '/_app/settings'
+    | '/_app/bom/$id'
+    | '/_app/bom/new'
     | '/_app/manufacturing/$id'
     | '/_app/purchase/$id'
     | '/_app/sales/$id'
+    | '/_app/bom/'
     | '/_app/manufacturing/'
     | '/_app/purchase/'
     | '/_app/sales/'
@@ -317,6 +363,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppBomRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/automation': {
+      id: '/_app/automation'
+      path: '/automation'
+      fullPath: '/automation'
+      preLoaderRoute: typeof AppAutomationRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/audit': {
       id: '/_app/audit'
       path: '/audit'
@@ -345,6 +398,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppManufacturingIndexRouteImport
       parentRoute: typeof AppManufacturingRoute
     }
+    '/_app/bom/': {
+      id: '/_app/bom/'
+      path: '/'
+      fullPath: '/bom/'
+      preLoaderRoute: typeof AppBomIndexRouteImport
+      parentRoute: typeof AppBomRoute
+    }
     '/_app/sales/$id': {
       id: '/_app/sales/$id'
       path: '/$id'
@@ -366,8 +426,37 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppManufacturingIdRouteImport
       parentRoute: typeof AppManufacturingRoute
     }
+    '/_app/bom/new': {
+      id: '/_app/bom/new'
+      path: '/new'
+      fullPath: '/bom/new'
+      preLoaderRoute: typeof AppBomNewRouteImport
+      parentRoute: typeof AppBomRoute
+    }
+    '/_app/bom/$id': {
+      id: '/_app/bom/$id'
+      path: '/$id'
+      fullPath: '/bom/$id'
+      preLoaderRoute: typeof AppBomIdRouteImport
+      parentRoute: typeof AppBomRoute
+    }
   }
 }
+
+interface AppBomRouteChildren {
+  AppBomIdRoute: typeof AppBomIdRoute
+  AppBomNewRoute: typeof AppBomNewRoute
+  AppBomIndexRoute: typeof AppBomIndexRoute
+}
+
+const AppBomRouteChildren: AppBomRouteChildren = {
+  AppBomIdRoute: AppBomIdRoute,
+  AppBomNewRoute: AppBomNewRoute,
+  AppBomIndexRoute: AppBomIndexRoute,
+}
+
+const AppBomRouteWithChildren =
+  AppBomRoute._addFileChildren(AppBomRouteChildren)
 
 interface AppManufacturingRouteChildren {
   AppManufacturingIdRoute: typeof AppManufacturingIdRoute
@@ -412,7 +501,8 @@ const AppSalesRouteWithChildren = AppSalesRoute._addFileChildren(
 
 interface AppRouteChildren {
   AppAuditRoute: typeof AppAuditRoute
-  AppBomRoute: typeof AppBomRoute
+  AppAutomationRoute: typeof AppAutomationRoute
+  AppBomRoute: typeof AppBomRouteWithChildren
   AppDashboardRoute: typeof AppDashboardRoute
   AppInventoryRoute: typeof AppInventoryRoute
   AppManufacturingRoute: typeof AppManufacturingRouteWithChildren
@@ -424,7 +514,8 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAuditRoute: AppAuditRoute,
-  AppBomRoute: AppBomRoute,
+  AppAutomationRoute: AppAutomationRoute,
+  AppBomRoute: AppBomRouteWithChildren,
   AppDashboardRoute: AppDashboardRoute,
   AppInventoryRoute: AppInventoryRoute,
   AppManufacturingRoute: AppManufacturingRouteWithChildren,

@@ -6,4 +6,6 @@ import java.util.Optional;
 
 public interface BoMRepository extends JpaRepository<BoM, String> {
     Optional<BoM> findByProductId(String productId);
+    Optional<BoM> findByProductIdAndIsActiveTrue(String productId);
+    Optional<BoM> findFirstByOrderByBomReferenceDesc();
 }

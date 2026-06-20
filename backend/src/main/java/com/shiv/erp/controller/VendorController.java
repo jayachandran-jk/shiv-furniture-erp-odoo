@@ -20,4 +20,22 @@ public class VendorController {
     public ResponseEntity<List<Vendor>> getVendors() {
         return ResponseEntity.ok(vendorRepository.findAll());
     }
+
+    @PostMapping
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN','PURCHASE')")
+    public ResponseEntity<?> createVendor(@RequestBody Vendor vendor) {
+        try {
+            if (vendor.getId() == null || vendor.getId().isEmpty()) {
+                vendor.setId("v-" + java.util.UUID.randomUUID().toString().substring(0, 8));
+            }
+            if (vendor.getContact() == null || vendor.getContact().isEmpty()) {
+                vendor.setContact(vendor.getPhone());
+            }
+            Vendor saved = vendorRepository.save(vendor);
+            return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(saved);
+        } catch (Exception e) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.BAD_REQUEST)
+                    .body(java.util.Map.of("error", e.getMessage()));
+        }
+    }
 }

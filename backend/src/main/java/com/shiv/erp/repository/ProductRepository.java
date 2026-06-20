@@ -12,4 +12,7 @@ public interface ProductRepository extends JpaRepository<Product, String> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT p FROM Product p WHERE p.id = :id")
     Optional<Product> findByIdForUpdate(@Param("id") String id);
+
+    @Query("SELECT COUNT(p) FROM Product p WHERE p.onHandQty < p.reorderThreshold AND p.reorderThreshold > 0")
+    long countActiveShortages();
 }

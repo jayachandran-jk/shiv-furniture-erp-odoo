@@ -48,7 +48,7 @@ export function seedData() {
 
   const boms: BoM[] = [
     {
-      id: "bom-1", productId: "p-f1",
+      id: "bom-1", bomReference: "BOM-000001", productId: "p-f1", qtyProduced: 1.0, version: 1, isActive: true,
       components: [
         { productId: "p-w1", qty: 3 },
         { productId: "p-w5", qty: 4 },
@@ -56,36 +56,36 @@ export function seedData() {
         { productId: "p-w4", qty: 1 },
       ],
       operations: [
-        { id: "op-1", name: "Cut planks to size", workCenterId: "wc-1", durationMinutes: 90 },
-        { id: "op-2", name: "Sand all surfaces", workCenterId: "wc-3", durationMinutes: 60 },
-        { id: "op-3", name: "Assemble table", workCenterId: "wc-2", durationMinutes: 120 },
-        { id: "op-4", name: "Apply walnut finish", workCenterId: "wc-4", durationMinutes: 150 },
+        { id: "op-1", sequence: 10, name: "Cut planks to size", workCenterId: "wc-1", durationMinutes: 90 },
+        { id: "op-2", sequence: 20, name: "Sand all surfaces", workCenterId: "wc-3", durationMinutes: 60 },
+        { id: "op-3", sequence: 30, name: "Assemble table", workCenterId: "wc-2", durationMinutes: 120 },
+        { id: "op-4", sequence: 40, name: "Apply walnut finish", workCenterId: "wc-4", durationMinutes: 150 },
       ],
     },
     {
-      id: "bom-2", productId: "p-f2",
+      id: "bom-2", bomReference: "BOM-000002", productId: "p-f2", qtyProduced: 1.0, version: 1, isActive: true,
       components: [{ productId: "p-w2", qty: 1 }, { productId: "p-w5", qty: 4 }, { productId: "p-w3", qty: 1 }],
       operations: [
-        { id: "op-5", name: "Cut chair parts", workCenterId: "wc-1", durationMinutes: 45 },
-        { id: "op-6", name: "Assemble chair", workCenterId: "wc-2", durationMinutes: 75 },
-        { id: "op-7", name: "Polish", workCenterId: "wc-4", durationMinutes: 90 },
+        { id: "op-5", sequence: 10, name: "Cut chair parts", workCenterId: "wc-1", durationMinutes: 45 },
+        { id: "op-6", sequence: 20, name: "Assemble chair", workCenterId: "wc-2", durationMinutes: 75 },
+        { id: "op-7", sequence: 30, name: "Polish", workCenterId: "wc-4", durationMinutes: 90 },
       ],
     },
     {
-      id: "bom-3", productId: "p-f3",
+      id: "bom-3", bomReference: "BOM-000003", productId: "p-f3", qtyProduced: 1.0, version: 1, isActive: true,
       components: [{ productId: "p-w2", qty: 2 }, { productId: "p-w3", qty: 1 }, { productId: "p-w4", qty: 1 }],
       operations: [
-        { id: "op-8", name: "Cut shelves", workCenterId: "wc-1", durationMinutes: 60 },
-        { id: "op-9", name: "Assemble shelf frame", workCenterId: "wc-2", durationMinutes: 100 },
-        { id: "op-10", name: "Finish coat", workCenterId: "wc-4", durationMinutes: 120 },
+        { id: "op-8", sequence: 10, name: "Cut shelves", workCenterId: "wc-1", durationMinutes: 60 },
+        { id: "op-9", sequence: 20, name: "Assemble shelf frame", workCenterId: "wc-2", durationMinutes: 100 },
+        { id: "op-10", sequence: 30, name: "Finish coat", workCenterId: "wc-4", durationMinutes: 120 },
       ],
     },
     {
-      id: "bom-4", productId: "p-f4",
+      id: "bom-4", bomReference: "BOM-000004", productId: "p-f4", qtyProduced: 1.0, version: 1, isActive: true,
       components: [{ productId: "p-w2", qty: 1 }, { productId: "p-w5", qty: 4 }, { productId: "p-w3", qty: 1 }],
       operations: [
-        { id: "op-11", name: "Cut desk panels", workCenterId: "wc-1", durationMinutes: 50 },
-        { id: "op-12", name: "Assemble desk", workCenterId: "wc-2", durationMinutes: 80 },
+        { id: "op-11", sequence: 10, name: "Cut desk panels", workCenterId: "wc-1", durationMinutes: 50 },
+        { id: "op-12", sequence: 20, name: "Assemble desk", workCenterId: "wc-2", durationMinutes: 80 },
       ],
     },
   ];

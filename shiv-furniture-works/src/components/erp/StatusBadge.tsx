@@ -13,6 +13,8 @@ const MAP: Record<string, string> = {
   "Pending": "bg-muted text-muted-foreground border-border",
   "Started": "bg-accent/15 text-accent border-accent/30",
   "Paused": "bg-warning/15 text-warning border-warning/30",
+  "Active": "bg-success/15 text-success border-success/30",
+  "Inactive": "bg-muted text-muted-foreground border-border",
 };
 
 export function StatusBadge({ status, className }: { status: string; className?: string }) {

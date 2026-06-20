@@ -13,7 +13,12 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS vendors (
     id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
-    contact VARCHAR(255)
+    contact VARCHAR(255),
+    contact_person VARCHAR(100),
+    email VARCHAR(100),
+    phone VARCHAR(20),
+    address TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS customers (
@@ -25,7 +30,10 @@ CREATE TABLE IF NOT EXISTS customers (
 
 CREATE TABLE IF NOT EXISTS work_centers (
     id VARCHAR(50) PRIMARY KEY,
-    name VARCHAR(255) NOT NULL
+    name VARCHAR(255) NOT NULL UNIQUE,
+    description TEXT,
+    capacity_per_day INT DEFAULT 8,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS products (
@@ -46,28 +54,41 @@ CREATE TABLE IF NOT EXISTS products (
     FOREIGN KEY (preferred_vendor_id) REFERENCES vendors(id) ON DELETE SET NULL
 );
 
-CREATE TABLE IF NOT EXISTS boms (
+CREATE TABLE IF NOT EXISTS bill_of_materials (
     id VARCHAR(50) PRIMARY KEY,
-    product_id VARCHAR(50) NOT NULL,
-    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+    bom_reference VARCHAR(20) UNIQUE NOT NULL,
+    finished_product_id VARCHAR(50) NOT NULL,
+    qty_produced DECIMAL(10,2) NOT NULL DEFAULT 1.0,
+    version INT NOT NULL DEFAULT 1,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    notes TEXT,
+    created_by VARCHAR(36),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (finished_product_id) REFERENCES products(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS bom_components (
+    id VARCHAR(50) PRIMARY KEY,
     bom_id VARCHAR(50) NOT NULL,
-    product_id VARCHAR(50) NOT NULL,
-    qty INT NOT NULL,
-    PRIMARY KEY (bom_id, product_id),
-    FOREIGN KEY (bom_id) REFERENCES boms(id) ON DELETE CASCADE,
-    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+    component_product_id VARCHAR(50) NOT NULL,
+    qty_required DECIMAL(10,4) NOT NULL,
+    unit_of_measure VARCHAR(20) DEFAULT 'pcs',
+    notes VARCHAR(255),
+    FOREIGN KEY (bom_id) REFERENCES bill_of_materials(id) ON DELETE CASCADE,
+    FOREIGN KEY (component_product_id) REFERENCES products(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS bom_operations (
     id VARCHAR(50) PRIMARY KEY,
     bom_id VARCHAR(50) NOT NULL,
-    name VARCHAR(255) NOT NULL,
+    sequence INT NOT NULL,
+    operation_name VARCHAR(100) NOT NULL,
     work_center_id VARCHAR(50),
     duration_minutes INT NOT NULL,
-    FOREIGN KEY (bom_id) REFERENCES boms(id) ON DELETE CASCADE,
+    notes VARCHAR(255),
+    FOREIGN KEY (bom_id) REFERENCES bill_of_materials(id) ON DELETE CASCADE,
     FOREIGN KEY (work_center_id) REFERENCES work_centers(id) ON DELETE SET NULL
 );
 
@@ -101,6 +122,8 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     number VARCHAR(100) NOT NULL UNIQUE,
     vendor_id VARCHAR(50) NOT NULL,
     date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expected_delivery_date TIMESTAMP NULL,
+    notes TEXT,
     status VARCHAR(50) NOT NULL,
     created_by VARCHAR(36),
     is_auto_generated BOOLEAN DEFAULT FALSE,
@@ -189,3 +212,35 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     new_value JSON,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL,
+    title VARCHAR(150) NOT NULL,
+    message VARCHAR(255) NOT NULL,
+    entity_type VARCHAR(40),
+    entity_id VARCHAR(50),
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS automation_events (
+    id VARCHAR(50) PRIMARY KEY,
+    ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    trigger_type VARCHAR(50),
+    trigger_entity_id VARCHAR(50),
+    product_id VARCHAR(50),
+    product_sku VARCHAR(100),
+    available_qty INT,
+    required_qty INT,
+    shortage_qty INT,
+    action_taken VARCHAR(50),
+    generated_doc_id VARCHAR(50),
+    generated_doc_number VARCHAR(100),
+    status VARCHAR(20) DEFAULT 'SUCCESS',
+    notes TEXT,
+    parent_event_id VARCHAR(50),
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL
+);
+
