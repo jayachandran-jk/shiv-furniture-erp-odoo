@@ -58,4 +58,15 @@ public class Product {
     @Column(name = "reserved_qty")
     @Builder.Default
     private Integer reservedQty = 0;
+
+    @org.hibernate.annotations.CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private java.time.LocalDateTime createdAt;
+
+    @org.hibernate.annotations.UpdateTimestamp
+    @Column(name = "updated_at")
+    private java.time.LocalDateTime updatedAt;
+
+    @Transient
+    private java.util.List<BomComponent> components;
 }

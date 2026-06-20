@@ -46,7 +46,7 @@ public class BoMController {
             @RequestParam(required = false) String productId,
             @RequestParam(required = false) Boolean isActive
     ) {
-        List<BoM> boms = bomRepository.findAll();
+        List<BoM> boms = bomRepository.findAllByOrderByUpdatedAtDesc();
 
         if (productId != null && !productId.isEmpty()) {
             boms = boms.stream()

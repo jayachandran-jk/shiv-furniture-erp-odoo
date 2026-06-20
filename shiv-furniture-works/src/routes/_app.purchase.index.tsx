@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useERP, useCurrentUser } from "@/lib/erp/store";
 import { hasPermission } from "@/lib/erp/permissions";
 import { DataTable, type Column } from "@/components/erp/DataTable";
@@ -111,7 +111,20 @@ function NewPO({ vendors, products, createVendor, onSubmit }: {
   const [notes, setNotes] = useState("");
   const purchaseable = products.filter((p: any) => p.procurementType === "Purchase");
   const [lines, setLines] = useState([{ productId: purchaseable[0]?.id || "", qty: 1, unitPrice: purchaseable[0]?.costPrice || 0 }]);
+  const { boms } = useERP();
   const [vendorModalOpen, setVendorModalOpen] = useState(false);
+  const [vendorOptions, setVendorOptions] = useState(vendors);
+
+  useEffect(() => {
+    fetch("http://localhost:4000/api/vendors", { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } })
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setVendorOptions(data);
+          setVendorId(prev => (!prev && data.length > 0 ? data[0].id : prev));
+        }
+      }).catch(console.error);
+  }, []);
   const [newVendor, setNewVendor] = useState({
     name: "",
     contactPerson: "",
@@ -143,7 +156,7 @@ function NewPO({ vendors, products, createVendor, onSubmit }: {
             <div className="flex-1">
               <Field label="Vendor">
                 <Select value={vendorId} onChange={e => setVendorId(e.target.value)} required>
-                  {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                  {vendorOptions.map((v: any) => <option key={v.id} value={v.id}>{v.name}</option>)}
                 </Select>
               </Field>
             </div>
@@ -173,8 +186,20 @@ function NewPO({ vendors, products, createVendor, onSubmit }: {
                     <Select value={line.productId} onChange={e => {
                       const p = products.find((x: any) => x.id === e.target.value);
                       setLines(ls => ls.map((l, idx) => idx === i ? { ...l, productId: e.target.value, unitPrice: p?.costPrice || 0 } : l));
+                      if (p?.preferredVendorId) {
+                        setVendorId(prev => prev || p.preferredVendorId);
+                      }
                     }}>
-                      {purchaseable.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      {purchaseable.map((p: any) => {
+                        const free = (p.onHandQty || p.onHand || 0) - (p.reservedQty || p.reserved || 0);
+                        const isComponent = boms?.some(b => b.components?.some(c => c.productId === p.id));
+                        const lowStock = free <= (p.reorderThreshold || 0);
+                        return (
+                          <option key={p.id} value={p.id}>
+                            {p.name} {isComponent ? "[BoM Component]" : ""} (Free: {free} {lowStock ? "⚠ Low Stock" : ""})
+                          </option>
+                        );
+                      })}
                     </Select>
                   </Field>
                 </div>

@@ -34,9 +34,17 @@ public class AuthController {
         // Look up user case-insensitive
         User user = userRepository.findByEmailIgnoreCase(request.getEmail().trim().toLowerCase()).orElse(null);
         
-        if (user == null || !user.getIsActive() || !passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+        System.out.println("Login attempt for: " + request.getEmail());
+        System.out.println("User found: " + (user != null));
+        if (user != null) {
+            System.out.println("isActive: " + user.getIsActive());
+            System.out.println("password match: " + passwordEncoder.matches(request.getPassword(), user.getPasswordHash()));
+        }
+
+        if (user == null || Boolean.FALSE.equals(user.getIsActive()) || !passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+            String dbg = user == null ? "User is null" : "isActive: " + user.getIsActive() + " Pwd: " + passwordEncoder.matches(request.getPassword(), user.getPasswordHash());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("error", "Invalid email or password"));
+                    .body(Map.of("error", "Invalid email or password: " + dbg));
         }
 
         String token = jwtService.generateToken(user.getEmail(), user.getRole(), user.getEmail());

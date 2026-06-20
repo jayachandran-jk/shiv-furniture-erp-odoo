@@ -14,7 +14,7 @@ public class BomOperation {
     @Column(length = 50)
     private String id;
 
-    @Column(name = "bom_id", length = 50)
+    @Column(name = "bom_id", length = 50, insertable = false, updatable = false)
     private String bomId;
 
     @Column(nullable = false)

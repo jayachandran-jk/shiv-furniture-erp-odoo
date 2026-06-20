@@ -27,6 +27,7 @@ export interface Product {
   reorderThreshold: number;
   onHand: number;
   reserved: number;
+  components?: BomComponent[]; // transient — used only during product creation
 }
 
 export interface Vendor {
@@ -139,6 +140,19 @@ export interface WorkOrder {
 }
 
 export type MoStatus = "Draft" | "Confirmed" | "Waiting for Materials" | "In Progress" | "Done" | "Cancelled";
+
+export interface ShortageTicket {
+  id: string;
+  moId: string;
+  productId: string;
+  shortageQty: number;
+  poId?: string;
+  poNumber?: string;
+  status: "OPEN" | "RESOLVED";
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface ManufacturingOrder {
   id: string;
   number: string;
@@ -151,6 +165,7 @@ export interface ManufacturingOrder {
   workOrders: WorkOrder[];
   auto?: boolean;
   triggeringSalesOrderId?: string;
+  shortageTickets?: ShortageTicket[];
 }
 
 export type LedgerType = "Receipt" | "Delivery" | "Manufacturing In" | "Manufacturing Out" | "Reserve" | "Unreserve" | "Adjustment";

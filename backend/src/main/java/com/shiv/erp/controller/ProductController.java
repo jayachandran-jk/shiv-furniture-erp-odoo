@@ -2,9 +2,13 @@ package com.shiv.erp.controller;
 
 import com.shiv.erp.model.Product;
 import com.shiv.erp.model.StockLedger;
+import com.shiv.erp.model.BoM;
+import com.shiv.erp.model.BomComponent;
 import com.shiv.erp.repository.ProductRepository;
 import com.shiv.erp.repository.StockLedgerRepository;
+import com.shiv.erp.repository.BoMRepository;
 import com.shiv.erp.service.AuditLogService;
+import com.shiv.erp.service.ProcurementService;
 import com.shiv.erp.utils.SecurityUtils;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -24,13 +28,19 @@ public class ProductController {
     private final ProductRepository productRepository;
     private final StockLedgerRepository stockLedgerRepository;
     private final AuditLogService auditLogService;
+    private final BoMRepository bomRepository;
+    private final ProcurementService procurementService;
 
     public ProductController(ProductRepository productRepository,
                              StockLedgerRepository stockLedgerRepository,
-                             AuditLogService auditLogService) {
+                             AuditLogService auditLogService,
+                             BoMRepository bomRepository,
+                             ProcurementService procurementService) {
         this.productRepository = productRepository;
         this.stockLedgerRepository = stockLedgerRepository;
         this.auditLogService = auditLogService;
+        this.bomRepository = bomRepository;
+        this.procurementService = procurementService;
     }
 
     @GetMapping
@@ -39,7 +49,7 @@ public class ProductController {
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String strategy
     ) {
-        List<Product> products = productRepository.findAll();
+        List<Product> products = productRepository.findAllByOrderByUpdatedAtDesc();
 
         if (search != null && !search.trim().isEmpty()) {
             String q = search.trim().toLowerCase();
@@ -88,12 +98,44 @@ public class ProductController {
         }
 
         if (productRepository.findById(product.getId()).isPresent() || 
-            (product.getSku() != null && productRepository.findAll().stream().anyMatch(p -> p.getSku().equalsIgnoreCase(product.getSku())))) {
+            (product.getSku() != null && productRepository.findAllByOrderByUpdatedAtDesc().stream().anyMatch(p -> p.getSku().equalsIgnoreCase(product.getSku())))) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("error", "Product ID or SKU is already in use"));
         }
 
         Product saved = productRepository.save(product);
+
+        // Auto-create BoM if procurementType is Manufacturing and components are specified
+        if ("Manufacturing".equalsIgnoreCase(saved.getProcurementType()) && 
+            product.getComponents() != null && !product.getComponents().isEmpty()) {
+            
+            BoM bom = new BoM();
+            String bomId = "bom-" + UUID.randomUUID().toString().substring(0, 8);
+            bom.setId(bomId);
+            
+            String ref = procurementService.generateNextNumber("BOM", bomRepository.findFirstByOrderByBomReferenceDesc().map(BoM::getBomReference));
+            bom.setBomReference(ref);
+            bom.setProductId(saved.getId());
+            bom.setQtyProduced(1.0);
+            bom.setVersion(1);
+            bom.setIsActive(true);
+            bom.setNotes(saved.getName() + " - Default BoM");
+            bom.setCreatedBy(SecurityUtils.getCurrentUserId());
+            
+            List<BomComponent> bomComponents = new java.util.ArrayList<>();
+            for (BomComponent bc : product.getComponents()) {
+                bc.setId("bc-" + UUID.randomUUID().toString().substring(0, 8));
+                bc.setBomId(bomId);
+                bomComponents.add(bc);
+            }
+            bom.setComponents(bomComponents);
+            bom.setOperations(new java.util.ArrayList<>());
+            
+            BoM savedBom = bomRepository.save(bom);
+            
+            saved.setBomId(savedBom.getId());
+            saved = productRepository.save(saved);
+        }
 
         auditLogService.logChange(
                 SecurityUtils.getCurrentUserId(),

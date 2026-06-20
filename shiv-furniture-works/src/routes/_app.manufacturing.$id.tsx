@@ -1,10 +1,11 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useERP, useCurrentUser } from "@/lib/erp/store";
+import { useEffect, useState } from "react";
 import { hasPermission } from "@/lib/erp/permissions";
 import { StatusBadge } from "@/components/erp/StatusBadge";
-import { Button, StatusStepper } from "@/components/erp/ui";
+import { Button, StatusStepper, Field, Input, Select } from "@/components/erp/ui";
 import { format } from "date-fns";
-import { ArrowLeft, Play, Pause, Check } from "lucide-react";
+import { ArrowLeft, Play, Pause, Check, Pencil, X, Save } from "lucide-react";
 import type { WorkOrder } from "@/lib/erp/types";
 
 export const Route = createFileRoute("/_app/manufacturing/$id")({
@@ -28,20 +29,59 @@ function MoDetail() {
   const writable = hasPermission(user?.role, "manufacturing:write");
   const {
     manufacturingOrders, products, workCenters, users, salesOrders,
-    confirmManufacturingOrder, setWorkOrderStatus, completeManufacturingOrder, cancelManufacturingOrder, tick,
+    confirmManufacturingOrder, setWorkOrderStatus, completeManufacturingOrder, cancelManufacturingOrder,
+    updateManufacturingOrder, tick, refreshData
   } = useERP();
   void tick;
   const mo = manufacturingOrders.find(m => m.id === id);
+
+  const [editingComponents, setEditingComponents] = useState(false);
+  const [editComponents, setEditComponents] = useState<{ productId: string; requiredQty: number }[]>([]);
+
+  useEffect(() => {
+    if (!mo) return;
+    const hasActiveWO = mo.workOrders.some(wo => wo.status === "Started");
+    if (mo.status !== "Done" && mo.status !== "Cancelled" && hasActiveWO) {
+      const interval = setInterval(() => {
+        refreshData();
+      }, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [mo, refreshData]);
+
   if (!mo) return <p>Not found. <Link to="/manufacturing" className="text-accent">Back</Link></p>;
 
   const product = products.find(p => p.id === mo.productId);
   const wcName = (id: string) => workCenters.find(w => w.id === id)?.name || id;
   const assignee = users.find(u => u.id === mo.assigneeId);
   const triggerSO = salesOrders.find(s => s.id === mo.triggeringSalesOrderId);
+  const isDraft = mo.status === "Draft";
 
   function elapsed(wo: WorkOrder) {
     const live = wo.status === "Started" && wo.startedAt ? Date.now() - wo.startedAt : 0;
     return wo.accumulatedMs + live;
+  }
+
+  function startEditComponents() {
+    if (!mo) return;
+    setEditComponents(mo.bomSnapshot.components.map(c => ({
+      productId: c.productId,
+      requiredQty: c.qty * mo.qty,
+    })));
+    setEditingComponents(true);
+  }
+
+  function addEditComponent() {
+    const available = products.filter(p => !editComponents.some(ec => ec.productId === p.id));
+    if (available.length > 0) {
+      setEditComponents([...editComponents, { productId: available[0].id, requiredQty: 1 }]);
+    }
+  }
+
+  async function saveComponents() {
+    if (!mo) return;
+    await updateManufacturingOrder(mo.id, { components: editComponents });
+    setEditingComponents(false);
   }
 
   return (
@@ -58,6 +98,11 @@ function MoDetail() {
               {product?.name} · qty {mo.qty} · assignee {assignee?.name || "—"} · {format(new Date(mo.date), "dd MMM yyyy")}
               {triggerSO && <> · from <Link to="/sales/$id" params={{ id: triggerSO.id }} className="text-accent">{triggerSO.number}</Link></>}
             </p>
+            {mo.workOrders.length > 0 && (
+              <p className="mt-1 text-xs font-medium text-accent">
+                {mo.workOrders.filter(wo => wo.status === "Done" || (wo.status as string) === "Completed").length} of {mo.workOrders.length} work orders completed
+              </p>
+            )}
           </div>
           <StatusBadge status={mo.status} />
         </div>
@@ -69,27 +114,87 @@ function MoDetail() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <section>
-          <h2 className="mb-2 font-serif text-base font-semibold">Components</h2>
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="font-serif text-base font-semibold">Components</h2>
+            {writable && isDraft && !editingComponents && (
+              <Button variant="ghost" onClick={startEditComponents} className="text-xs"><Pencil className="h-3 w-3" /> Edit</Button>
+            )}
+            {editingComponents && (
+              <div className="flex gap-1">
+                <Button variant="ghost" onClick={() => setEditingComponents(false)} className="text-xs"><X className="h-3 w-3" /> Cancel</Button>
+                <Button variant="primary" onClick={saveComponents} className="text-xs"><Save className="h-3 w-3" /> Save</Button>
+              </div>
+            )}
+          </div>
           <div className="overflow-hidden rounded-lg border bg-card">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/40 text-left text-[12px] uppercase tracking-wide text-muted-foreground">
-                <tr><th className="px-3 py-2 font-medium">Component</th><th className="px-3 py-2 text-right font-medium">Required</th><th className="px-3 py-2 text-right font-medium">Available</th></tr>
-              </thead>
-              <tbody>
-                {mo.bomSnapshot.components.map(c => {
-                  const p = products.find(x => x.id === c.productId);
-                  const need = c.qty * mo.qty;
-                  const free = p ? p.onHand - p.reserved : 0;
+            {editingComponents ? (
+              <div className="space-y-2 p-3">
+                {editComponents.map((ec, i) => {
+                  const p = products.find(x => x.id === ec.productId);
                   return (
-                    <tr key={c.productId} className="border-b last:border-b-0">
-                      <td className="px-3 py-2">{p?.name} <span className="font-mono text-xs text-muted-foreground">{p?.sku}</span></td>
-                      <td className="px-3 py-2 text-right tabular">{need}</td>
-                      <td className={`px-3 py-2 text-right tabular ${free < need ? "text-warning font-medium" : ""}`}>{free}</td>
-                    </tr>
+                    <div key={i} className="flex items-end gap-2">
+                      <Field label="Component">
+                        <Select value={ec.productId} onChange={e => {
+                          const updated = [...editComponents];
+                          updated[i] = { ...ec, productId: e.target.value };
+                          setEditComponents(updated);
+                        }} className="w-44">
+                          {products.filter(pp => pp.id !== mo.productId).map(pp => (
+                            <option key={pp.id} value={pp.id}>{pp.name} ({pp.sku})</option>
+                          ))}
+                        </Select>
+                      </Field>
+                      <Field label="Qty">
+                        <Input type="number" min={1} value={ec.requiredQty} onChange={e => {
+                          const updated = [...editComponents];
+                          updated[i] = { ...ec, requiredQty: +e.target.value };
+                          setEditComponents(updated);
+                        }} className="w-20" />
+                      </Field>
+                      <Button type="button" variant="danger" onClick={() => setEditComponents(editComponents.filter((_, idx) => idx !== i))} className="text-xs">✕</Button>
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
+                <Button type="button" variant="ghost" onClick={addEditComponent} className="text-xs">+ Add component</Button>
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="bg-muted/40 text-left text-[12px] uppercase tracking-wide text-muted-foreground">
+                  <tr><th className="px-3 py-2 font-medium">Component</th><th className="px-3 py-2 text-right font-medium">Required</th><th className="px-3 py-2 text-right font-medium">Available</th></tr>
+                </thead>
+                <tbody>
+                  {mo.bomSnapshot.components.map(c => {
+                    const p = products.find(x => x.id === c.productId);
+                    const need = c.qty * mo.qty;
+                    const free = p ? p.onHand - p.reserved : 0;
+                    // Find shortage ticket for this component
+                    const ticket = (mo.shortageTickets || []).find(t => t.productId === c.productId);
+                    return (
+                      <tr key={c.productId} className="border-b last:border-b-0">
+                        <td className="px-3 py-2">
+                          {p?.name} <span className="font-mono text-xs text-muted-foreground">{p?.sku}</span>
+                          {ticket && (
+                            <div className="mt-0.5">
+                              {ticket.poId ? (
+                                <Link to="/purchase/$id" params={{ id: ticket.poId }} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${ticket.status === "RESOLVED" ? "bg-success/10 text-success border border-success/30" : "bg-warning/10 text-warning border border-warning/30"}`}>
+                                  Shortage: {ticket.poNumber} ({ticket.status === "RESOLVED" ? "Resolved" : "Open"})
+                                </Link>
+                              ) : (
+                                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${ticket.status === "RESOLVED" ? "bg-success/10 text-success border border-success/30" : "bg-warning/10 text-warning border border-warning/30"}`}>
+                                  Shortage: {ticket.shortageQty} short ({ticket.status === "RESOLVED" ? "Resolved" : "Open"})
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular">{need}</td>
+                        <td className={`px-3 py-2 text-right tabular ${free < need ? "text-warning font-medium" : ""}`}>{free}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
           </div>
         </section>
 
@@ -116,12 +221,12 @@ function MoDetail() {
                     {writable && mo.status !== "Done" && mo.status !== "Cancelled" && wo.status !== "Done" && (
                       <div className="flex gap-1">
                         {wo.status !== "Started" && (
-                          <Button variant="ghost" onClick={() => setWorkOrderStatus(mo.id, wo.id, "Started")}><Play className="h-3 w-3" /> Start</Button>
+                          <Button variant="ghost" onClick={async () => { await setWorkOrderStatus(mo.id, wo.id, "Started"); await refreshData(); }}><Play className="h-3 w-3" /> Start</Button>
                         )}
                         {wo.status === "Started" && (
-                          <Button variant="ghost" onClick={() => setWorkOrderStatus(mo.id, wo.id, "Paused")}><Pause className="h-3 w-3" /> Pause</Button>
+                          <Button variant="ghost" onClick={async () => { await setWorkOrderStatus(mo.id, wo.id, "Paused"); await refreshData(); }}><Pause className="h-3 w-3" /> Pause</Button>
                         )}
-                        <Button variant="ghost" onClick={() => setWorkOrderStatus(mo.id, wo.id, "Done")}><Check className="h-3 w-3" /> Done</Button>
+                        <Button variant="ghost" onClick={async () => { await setWorkOrderStatus(mo.id, wo.id, "Done"); await refreshData(); }}><Check className="h-3 w-3" /> Done</Button>
                       </div>
                     )}
                   </div>

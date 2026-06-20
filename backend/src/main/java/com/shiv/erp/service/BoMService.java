@@ -3,7 +3,9 @@ package com.shiv.erp.service;
 import com.shiv.erp.model.BoM;
 import com.shiv.erp.model.BomComponent;
 import com.shiv.erp.model.BomOperation;
+import com.shiv.erp.model.Product;
 import com.shiv.erp.repository.BoMRepository;
+import com.shiv.erp.repository.ProductRepository;
 import com.shiv.erp.repository.BomOperationRepository;
 import com.shiv.erp.utils.SecurityUtils;
 import org.springframework.http.HttpStatus;
@@ -21,15 +23,18 @@ public class BoMService {
     private final BomOperationRepository bomOperationRepository;
     private final ProcurementService procurementService;
     private final AuditLogService auditLogService;
+    private final ProductRepository productRepository;
 
     public BoMService(BoMRepository bomRepository,
                       BomOperationRepository bomOperationRepository,
                       ProcurementService procurementService,
-                      AuditLogService auditLogService) {
+                      AuditLogService auditLogService,
+                      ProductRepository productRepository) {
         this.bomRepository = bomRepository;
         this.bomOperationRepository = bomOperationRepository;
         this.procurementService = procurementService;
         this.auditLogService = auditLogService;
+        this.productRepository = productRepository;
     }
 
     @Transactional
@@ -84,13 +89,16 @@ public class BoMService {
 
         BoM saved = bomRepository.save(bom);
 
+        Product product = productRepository.findById(saved.getProductId()).orElse(null);
+        String productName = product != null ? product.getName() : saved.getProductId();
+
         auditLogService.logChange(
                 currentUserId,
                 "BILL_OF_MATERIALS",
                 saved.getId(),
                 "Created",
                 null,
-                String.format("{\"bomReference\": \"%s\", \"finishedProductId\": \"%s\"}", saved.getBomReference(), saved.getProductId())
+                String.format("{\"bomReference\": \"%s\", \"finishedProductId\": \"%s\", \"finishedProductName\": \"%s\"}", saved.getBomReference(), saved.getProductId(), productName)
         );
 
         return saved;
@@ -155,7 +163,9 @@ public class BoMService {
 
         BoM saved = bomRepository.save(bom);
 
-        String newVal = String.format("{\"isActive\": %b, \"qtyProduced\": %s}", saved.getIsActive(), saved.getQtyProduced());
+        Product product = productRepository.findById(bom.getProductId()).orElse(null);
+        String productName = product != null ? product.getName() : bom.getProductId();
+        String newVal = String.format("{\"isActive\": %b, \"qtyProduced\": %s, \"finishedProductName\": \"%s\"}", saved.getIsActive(), saved.getQtyProduced(), productName);
 
         auditLogService.logChange(
                 currentUserId,

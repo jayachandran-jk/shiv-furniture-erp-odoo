@@ -204,6 +204,9 @@ function EditPO({ po, vendors, products, onSubmit }: {
                   <Select value={line.productId} onChange={e => {
                     const p = products.find((x: any) => x.id === e.target.value);
                     setLines((ls: any) => ls.map((l: any, idx: number) => idx === i ? { ...l, productId: e.target.value, unitPrice: p?.costPrice || 0 } : l));
+                    if (p?.preferredVendorId) {
+                      setVendorId(prev => prev || p.preferredVendorId);
+                    }
                   }}>
                     {purchaseable.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </Select>

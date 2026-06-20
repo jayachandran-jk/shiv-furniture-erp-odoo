@@ -15,4 +15,6 @@ public interface ProductRepository extends JpaRepository<Product, String> {
 
     @Query("SELECT COUNT(p) FROM Product p WHERE p.onHandQty < p.reorderThreshold AND p.reorderThreshold > 0")
     long countActiveShortages();
+
+    java.util.List<Product> findAllByOrderByUpdatedAtDesc();
 }

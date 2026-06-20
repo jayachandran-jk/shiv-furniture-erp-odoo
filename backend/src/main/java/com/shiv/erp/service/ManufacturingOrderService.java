@@ -25,6 +25,7 @@ public class ManufacturingOrderService {
     private final WorkOrderRepository workOrderRepository;
     private final NotificationService notificationService;
     private final SalesOrderRepository salesOrderRepository;
+    private final ShortageTicketRepository shortageTicketRepository;
 
     public ManufacturingOrderService(ManufacturingOrderRepository manufacturingOrderRepository,
                                      ProductRepository productRepository,
@@ -34,7 +35,8 @@ public class ManufacturingOrderService {
                                      AuditLogService auditLogService,
                                      WorkOrderRepository workOrderRepository,
                                      NotificationService notificationService,
-                                     SalesOrderRepository salesOrderRepository) {
+                                     SalesOrderRepository salesOrderRepository,
+                                     ShortageTicketRepository shortageTicketRepository) {
         this.manufacturingOrderRepository = manufacturingOrderRepository;
         this.productRepository = productRepository;
         this.bomRepository = bomRepository;
@@ -44,6 +46,7 @@ public class ManufacturingOrderService {
         this.workOrderRepository = workOrderRepository;
         this.notificationService = notificationService;
         this.salesOrderRepository = salesOrderRepository;
+        this.shortageTicketRepository = shortageTicketRepository;
     }
 
     @Transactional
@@ -127,6 +130,42 @@ public class ManufacturingOrderService {
     }
 
     @Transactional
+    public ManufacturingOrder updateOrder(String id, ManufacturingOrder patch) {
+        ManufacturingOrder mo = manufacturingOrderRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Manufacturing order not found: " + id));
+
+        if (!"Draft".equals(mo.getStatus())) {
+            throw new IllegalStateException("Only Draft manufacturing orders can be edited.");
+        }
+
+        if (patch.getAssigneeId() != null) {
+            mo.setAssigneeId(patch.getAssigneeId().isEmpty() ? null : patch.getAssigneeId());
+        }
+        if (patch.getQty() != null) {
+            mo.setQty(patch.getQty());
+        }
+
+        if (patch.getComponents() != null) {
+            mo.getComponents().clear();
+            for (MoComponent comp : patch.getComponents()) {
+                comp.setMoId(id);
+                if (comp.getRequiredQty() == null) {
+                    comp.setRequiredQty(0);
+                }
+                if (comp.getToConsumeQty() == null) {
+                    comp.setToConsumeQty(comp.getRequiredQty());
+                }
+                if (comp.getConsumedQty() == null) {
+                    comp.setConsumedQty(0);
+                }
+                mo.getComponents().add(comp);
+            }
+        }
+
+        return manufacturingOrderRepository.save(mo);
+    }
+
+    @Transactional
     public ManufacturingOrder confirmOrder(String id) {
         ManufacturingOrder mo = manufacturingOrderRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Manufacturing order not found: " + id));
@@ -141,6 +180,48 @@ public class ManufacturingOrderService {
         // Reserve component stock and check real availability
         if (mo.getComponents() != null) {
             for (MoComponent comp : mo.getComponents()) {
+                Product compProduct = productRepository.findById(comp.getProductId()).orElse(null);
+                if (compProduct != null) {
+                    int freeToUse = compProduct.getOnHandQty() - compProduct.getReservedQty();
+                    int required = comp.getRequiredQty();
+                    if (freeToUse < required) {
+                        waitingForMaterials = true;
+                        int shortageQty = required - Math.max(0, freeToUse);
+                        
+                        String poId = null;
+                        String poNumber = null;
+                        try {
+                            AutomationEvent ae = procurementService.triggerProcurementInternal(
+                                    compProduct,
+                                    shortageQty,
+                                    mo.getTriggeringSalesOrderId(),
+                                    "MO_SHORTAGE",
+                                    mo.getId(),
+                                    null,
+                                    new java.util.HashSet<>(),
+                                    0
+                            );
+                            if (ae != null) {
+                                poId = ae.getGeneratedDocId();
+                                poNumber = ae.getGeneratedDocNumber();
+                            }
+                        } catch (Exception e) {
+                            // log error
+                        }
+                        
+                        ShortageTicket ticket = ShortageTicket.builder()
+                                .id("st-" + UUID.randomUUID().toString().substring(0, 8))
+                                .moId(mo.getId())
+                                .productId(comp.getProductId())
+                                .shortageQty(shortageQty)
+                                .poId(poId)
+                                .poNumber(poNumber)
+                                .status("OPEN")
+                                .build();
+                        shortageTicketRepository.save(ticket);
+                    }
+                }
+
                 stockLedgerService.recordMovement(
                         comp.getProductId(),
                         "MFG_RESERVE",
@@ -149,11 +230,6 @@ public class ManufacturingOrderService {
                         mo.getId(),
                         "Reserve stock for Manufacturing Order"
                 );
-                // After reserving, check if actual on-hand covers the requirement
-                Product compProduct = productRepository.findById(comp.getProductId()).orElse(null);
-                if (compProduct != null && compProduct.getOnHandQty() < comp.getRequiredQty()) {
-                    waitingForMaterials = true;
-                }
             }
         }
 
@@ -220,13 +296,16 @@ public class ManufacturingOrderService {
         }
 
         if (!status.equals(oldStatus)) {
+            Product product = productRepository.findById(mo.getProductId()).orElse(null);
+            String productName = product != null ? product.getName() : mo.getProductId();
+
             auditLogService.logChange(
                     operatorId != null ? operatorId : SecurityUtils.getCurrentUserId(),
                     "WorkOrder",
                     targetWo.getId(),
                     "StatusChanged",
                     oldStatus,
-                    status
+                    String.format("{\"newStatus\": \"%s\", \"moId\": \"%s\", \"moNumber\": \"%s\", \"productName\": \"%s\"}", status, mo.getId(), mo.getNumber(), productName)
             );
         }
 
@@ -245,13 +324,16 @@ public class ManufacturingOrderService {
         if ("Confirmed".equals(mo.getStatus()) || "Waiting for Materials".equals(mo.getStatus())) {
             String oldMoStatus = mo.getStatus();
             mo.setStatus("In Progress");
+            Product product = productRepository.findById(mo.getProductId()).orElse(null);
+            String productName = product != null ? product.getName() : mo.getProductId();
+
             auditLogService.logChange(
                     SecurityUtils.getCurrentUserId(),
                     "ManufacturingOrder",
                     mo.getId(),
                     "StatusChanged",
                     oldMoStatus,
-                    "In Progress"
+                    String.format("{\"newStatus\": \"%s\", \"productName\": \"%s\"}", "In Progress", productName)
             );
         }
 
@@ -264,11 +346,20 @@ public class ManufacturingOrderService {
         ManufacturingOrder mo = manufacturingOrderRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Manufacturing order not found: " + id));
 
-        if ("Done".equals(mo.getStatus()) || "Cancelled".equals(mo.getStatus())) {
-            throw new IllegalStateException("Done or Cancelled orders cannot be completed.");
+        if (!"Confirmed".equals(mo.getStatus()) && !"In Progress".equals(mo.getStatus())) {
+            throw new IllegalStateException("Only Confirmed or In Progress orders can be completed.");
         }
 
         String userId = SecurityUtils.getCurrentUserId();
+
+        // Validate that all work orders are completed before allowing MO completion
+        if (mo.getWorkOrders() != null) {
+            for (WorkOrder wo : mo.getWorkOrders()) {
+                if (!"Completed".equals(wo.getStatus())) {
+                    throw new IllegalStateException("All work orders must be completed before the manufacturing order can be marked as Done.");
+                }
+            }
+        }
 
         // 1. Consume components
         if (mo.getComponents() != null) {
@@ -319,14 +410,17 @@ public class ManufacturingOrderService {
         mo.setStatus("Done");
         ManufacturingOrder saved = manufacturingOrderRepository.save(mo);
 
-        // Notify assignee, inventory managers, and admins
+        // Notify admins
+        Product productForNotif = productRepository.findById(saved.getProductId()).orElse(null);
+        String productName = productForNotif != null ? productForNotif.getName() : saved.getProductId();
+
         notificationService.notifyUserOrRoles(
-                saved.getAssigneeId(),
-                List.of("inventory", "admin"),
+                null,
+                List.of("admin"),
                 "Manufacturing Order Done",
-                String.format("Manufacturing Order %s for %s has been completed.", saved.getNumber(), saved.getProductId()),
-                "MANUFACTURING_ORDER",
-                saved.getId()
+                String.format("Manufacturing Order %s for %s has been completed.", saved.getNumber(), productName),
+                "PRODUCT",
+                saved.getProductId()
         );
 
         // Notify sales rep if linked to a Sales Order
@@ -337,9 +431,9 @@ public class ManufacturingOrderService {
                     notificationService.createNotification(
                             repId,
                             "MTO Stock Available",
-                            String.format("Shortage resolved for Sales Order %s. Link stock is now available for delivery.", so.getNumber()),
-                            "SALES_ORDER",
-                            so.getId()
+                            String.format("Production of %s is done for Sales Order %s. Last completed via %s.", productName, so.getNumber(), saved.getNumber()),
+                            "PRODUCT",
+                            saved.getProductId()
                     );
                 }
             });
@@ -351,7 +445,7 @@ public class ManufacturingOrderService {
                 saved.getId(),
                 "Completed",
                 oldStatus,
-                "Done"
+                String.format("{\"newStatus\": \"%s\", \"productName\": \"%s\", \"qty\": %d}", "Done", productName, saved.getQty())
         );
 
         return saved;

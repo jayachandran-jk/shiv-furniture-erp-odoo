@@ -2,6 +2,7 @@ package com.shiv.erp.controller;
 
 import com.shiv.erp.model.ManufacturingOrder;
 import com.shiv.erp.repository.ManufacturingOrderRepository;
+import com.shiv.erp.repository.ShortageTicketRepository;
 import com.shiv.erp.service.ManufacturingOrderService;
 import com.shiv.erp.utils.SecurityUtils;
 import jakarta.validation.Valid;
@@ -19,11 +20,14 @@ public class ManufacturingOrderController {
 
     private final ManufacturingOrderRepository manufacturingOrderRepository;
     private final ManufacturingOrderService manufacturingOrderService;
+    private final ShortageTicketRepository shortageTicketRepository;
 
     public ManufacturingOrderController(ManufacturingOrderRepository manufacturingOrderRepository,
-                                        ManufacturingOrderService manufacturingOrderService) {
+                                        ManufacturingOrderService manufacturingOrderService,
+                                        ShortageTicketRepository shortageTicketRepository) {
         this.manufacturingOrderRepository = manufacturingOrderRepository;
         this.manufacturingOrderService = manufacturingOrderService;
+        this.shortageTicketRepository = shortageTicketRepository;
     }
 
     @GetMapping
@@ -32,7 +36,7 @@ public class ManufacturingOrderController {
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String status
     ) {
-        List<ManufacturingOrder> orders = manufacturingOrderRepository.findAll();
+        List<ManufacturingOrder> orders = manufacturingOrderRepository.findAllByOrderByUpdatedAtDesc();
 
         if (status != null && !status.trim().isEmpty()) {
             orders = orders.stream()
@@ -48,6 +52,10 @@ public class ManufacturingOrderController {
                     .collect(Collectors.toList());
         }
 
+        for (ManufacturingOrder o : orders) {
+            o.setShortageTickets(shortageTicketRepository.findByMoId(o.getId()));
+        }
+
         return ResponseEntity.ok(orders);
     }
 
@@ -59,6 +67,7 @@ public class ManufacturingOrderController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("error", "Manufacturing order not found"));
         }
+        mo.setShortageTickets(shortageTicketRepository.findByMoId(id));
         return ResponseEntity.ok(mo);
     }
 
@@ -68,6 +77,18 @@ public class ManufacturingOrderController {
         try {
             ManufacturingOrder saved = manufacturingOrderService.createOrder(draft);
             return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','MANUFACTURING')")
+    public ResponseEntity<?> updateOrder(@PathVariable String id, @RequestBody ManufacturingOrder patch) {
+        try {
+            ManufacturingOrder updated = manufacturingOrderService.updateOrder(id, patch);
+            updated.setShortageTickets(shortageTicketRepository.findByMoId(id));
+            return ResponseEntity.ok(updated);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }

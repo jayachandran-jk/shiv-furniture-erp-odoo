@@ -25,9 +25,7 @@ public class SalesOrderController {
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN','SALES','OWNER')")
     public ResponseEntity<List<SalesOrder>> getAllOrders() {
-        List<SalesOrder> orders = salesOrderRepository.findAll();
-        // Sort by date descending
-        orders.sort((a, b) -> b.getDate() == null ? 0 : b.getDate().compareTo(a.getDate() == null ? b.getDate() : a.getDate()));
+        List<SalesOrder> orders = salesOrderRepository.findAllByOrderByUpdatedAtDesc();
         return ResponseEntity.ok(orders);
     }
 

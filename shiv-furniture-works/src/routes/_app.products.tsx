@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useERP, useCurrentUser, freeToUse } from "@/lib/erp/store";
 import { hasPermission } from "@/lib/erp/permissions";
@@ -81,6 +81,7 @@ function ProductsPage() {
         <ProductForm
           vendors={vendors}
           boms={boms}
+          products={products}
           onSubmit={(p) => { createProduct(p); setNewOpen(false); }}
         />
       </Sheet>
@@ -101,9 +102,10 @@ function ProductsPage() {
   );
 }
 
-function ProductForm({ vendors, boms, onSubmit, initial }: {
+function ProductForm({ vendors, boms, products, onSubmit, initial }: {
   vendors: { id: string; name: string }[];
   boms: { id: string; productId: string }[];
+  products?: Product[];
   onSubmit: (p: Omit<Product, "id" | "onHand" | "reserved"> & { onHand?: number }) => void;
   initial?: Product;
 }) {
@@ -121,8 +123,37 @@ function ProductForm({ vendors, boms, onSubmit, initial }: {
     reorderThreshold: initial?.reorderThreshold || 0,
     onHand: initial?.onHand ?? 0,
   });
+  const [components, setComponents] = useState<{ productId: string; qty: number }[]>([]);
+
+  // Available raw material products for component selection
+  const rawMaterials = (products || []).filter(p => p.id !== initial?.id);
+
+  const addComponent = () => setComponents([...components, { productId: rawMaterials[0]?.id || "", qty: 1 }]);
+  const removeComponent = (i: number) => setComponents(components.filter((_, idx) => idx !== i));
+  const updateComponent = (i: number, patch: Partial<{ productId: string; qty: number }>) =>
+    setComponents(components.map((c, idx) => idx === i ? { ...c, ...patch } : c));
+
+  // Calculate estimated total cost from components
+  const estimatedCost = components.reduce((sum, c) => {
+    const prod = rawMaterials.find(p => p.id === c.productId);
+    return sum + (prod?.costPrice || 0) * c.qty;
+  }, 0);
+
+  const hasDuplicates = new Set(components.map(c => c.productId)).size < components.length;
+
   return (
-    <form onSubmit={e => { e.preventDefault(); onSubmit(f); }} className="space-y-3">
+    <form onSubmit={e => {
+      e.preventDefault();
+      const payload: any = { ...f };
+      if (f.procurementType === "Manufacturing" && components.length > 0) {
+        payload.components = components.map(c => ({
+          productId: c.productId,
+          qty: c.qty,
+          unitOfMeasure: "pcs",
+        }));
+      }
+      onSubmit(payload);
+    }} className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <Field label="Name"><Input required value={f.name} onChange={e => setF({ ...f, name: e.target.value })} /></Field>
         <Field label="SKU"><Input required value={f.sku} onChange={e => setF({ ...f, sku: e.target.value })} /></Field>
@@ -150,7 +181,15 @@ function ProductForm({ vendors, boms, onSubmit, initial }: {
             </Select>
           </Field>
         )}
-        {f.procurementType === "Manufacturing" && (
+        {f.procurementType === "Manufacturing" && !initial && (
+          <Field label="Bill of Materials">
+            <Select value={f.bomId} onChange={e => setF({ ...f, bomId: e.target.value })}>
+              <option value="">Auto-create from components below</option>
+              {boms.map(b => <option key={b.id} value={b.id}>{b.id}</option>)}
+            </Select>
+          </Field>
+        )}
+        {f.procurementType === "Manufacturing" && initial && (
           <Field label="Bill of Materials">
             <Select value={f.bomId} onChange={e => setF({ ...f, bomId: e.target.value })}>
               <option value="">—</option>
@@ -160,9 +199,47 @@ function ProductForm({ vendors, boms, onSubmit, initial }: {
         )}
         <Field label="Opening stock"><Input type="number" value={f.onHand} onChange={e => setF({ ...f, onHand: +e.target.value })} /></Field>
       </div>
+
+      {/* Raw Materials / Components Editor — only for new Manufacturing products */}
+      {f.procurementType === "Manufacturing" && !initial && !f.bomId && (
+        <div className="space-y-2 rounded-lg border border-accent/20 bg-accent/5 p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[12px] font-medium uppercase text-muted-foreground">Raw materials / Components</span>
+            <Button type="button" variant="ghost" onClick={addComponent} className="text-xs">+ Add component</Button>
+          </div>
+          {components.length === 0 && (
+            <p className="text-xs text-muted-foreground">No components added. Click "Add component" to specify raw materials needed to produce this product.</p>
+          )}
+          {components.map((c, i) => {
+            const prod = rawMaterials.find(p => p.id === c.productId);
+            return (
+              <div key={i} className="flex items-end gap-2">
+                <Field label="Material">
+                  <Select value={c.productId} onChange={e => updateComponent(i, { productId: e.target.value })} className="w-48">
+                    {rawMaterials.map(p => <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>)}
+                  </Select>
+                </Field>
+                <Field label="Qty"><Input type="number" min={1} value={c.qty} onChange={e => updateComponent(i, { qty: +e.target.value })} className="w-20" /></Field>
+                <div className="pb-0.5 text-xs text-muted-foreground">
+                  @ ₹{(prod?.costPrice || 0).toLocaleString("en-IN")} = ₹{((prod?.costPrice || 0) * c.qty).toLocaleString("en-IN")}
+                </div>
+                <Button type="button" variant="danger" onClick={() => removeComponent(i)} className="text-xs">✕</Button>
+              </div>
+            );
+          })}
+          {components.length > 0 && (
+            <div className="flex items-center justify-between border-t border-accent/20 pt-2 text-sm font-medium">
+              <span>Estimated material cost</span>
+              <span className="text-accent">₹{estimatedCost.toLocaleString("en-IN")}</span>
+            </div>
+          )}
+          {hasDuplicates && <p className="text-xs text-destructive">⚠ Duplicate components detected. Each raw material should appear only once.</p>}
+        </div>
+      )}
+
       <Field label="Description"><Textarea value={f.description} onChange={e => setF({ ...f, description: e.target.value })} /></Field>
       <div className="flex justify-end gap-2 pt-2">
-        <Button type="submit" variant="primary">Save product</Button>
+        <Button type="submit" variant="primary" disabled={hasDuplicates}>Save product</Button>
       </div>
     </form>
   );
@@ -176,7 +253,14 @@ function ProductDetail({ product, ledger, vendors, boms, writable, onSave }: {
   writable: boolean;
   onSave: (patch: Partial<Product>) => void;
 }) {
+  const { manufacturingOrders } = useERP();
   const [editing, setEditing] = useState(false);
+  
+  const lastCompletedMO = useMemo(() => {
+    return manufacturingOrders
+      .filter(m => m.productId === product.id && m.status === "Done")
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+  }, [manufacturingOrders, product.id]);
   if (editing) {
     return <ProductForm vendors={vendors} boms={boms} initial={product} onSubmit={(p) => { onSave(p); setEditing(false); }} />;
   }
@@ -194,6 +278,19 @@ function ProductDetail({ product, ledger, vendors, boms, writable, onSave }: {
         <Detail label="Free to use" value={String(product.onHand - product.reserved)} />
         <Detail label="Reorder at" value={String(product.reorderThreshold)} />
       </div>
+      
+      {lastCompletedMO && (
+        <div className="rounded-md bg-accent/5 border border-accent/20 p-3 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="font-medium text-accent">Last Completed MO</span>
+            <span className="text-xs text-muted-foreground">{format(new Date(lastCompletedMO.date), "dd MMM yyyy")}</span>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Production of {lastCompletedMO.qty} units was last completed via <Link to="/manufacturing/$id" params={{ id: lastCompletedMO.id }} className="underline hover:text-accent-foreground">{lastCompletedMO.number}</Link>
+            {lastCompletedMO.triggeringSalesOrderId && " (MTO)"}.
+          </p>
+        </div>
+      )}
       {product.description && (
         <div className="text-sm">
           <div className="mb-1 text-[12px] font-medium uppercase text-muted-foreground">Notes</div>

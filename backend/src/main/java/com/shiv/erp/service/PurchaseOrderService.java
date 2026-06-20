@@ -5,10 +5,12 @@ import com.shiv.erp.model.MoComponent;
 import com.shiv.erp.model.Product;
 import com.shiv.erp.model.PurchaseOrder;
 import com.shiv.erp.model.PurchaseOrderLine;
+import com.shiv.erp.model.ShortageTicket;
 import com.shiv.erp.repository.ManufacturingOrderRepository;
 import com.shiv.erp.repository.ProductRepository;
 import com.shiv.erp.repository.PurchaseOrderRepository;
 import com.shiv.erp.repository.SalesOrderRepository;
+import com.shiv.erp.repository.ShortageTicketRepository;
 import com.shiv.erp.utils.SecurityUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +28,7 @@ public class PurchaseOrderService {
     private final SalesOrderRepository salesOrderRepository;
     private final ManufacturingOrderRepository manufacturingOrderRepository;
     private final ProductRepository productRepository;
+    private final ShortageTicketRepository shortageTicketRepository;
 
     public PurchaseOrderService(PurchaseOrderRepository purchaseOrderRepository,
                                StockLedgerService stockLedgerService,
@@ -34,7 +37,8 @@ public class PurchaseOrderService {
                                NotificationService notificationService,
                                SalesOrderRepository salesOrderRepository,
                                ManufacturingOrderRepository manufacturingOrderRepository,
-                               ProductRepository productRepository) {
+                               ProductRepository productRepository,
+                               ShortageTicketRepository shortageTicketRepository) {
         this.purchaseOrderRepository = purchaseOrderRepository;
         this.stockLedgerService = stockLedgerService;
         this.procurementService = procurementService;
@@ -43,6 +47,7 @@ public class PurchaseOrderService {
         this.salesOrderRepository = salesOrderRepository;
         this.manufacturingOrderRepository = manufacturingOrderRepository;
         this.productRepository = productRepository;
+        this.shortageTicketRepository = shortageTicketRepository;
     }
 
     public String normalizeStatus(String status) {
@@ -61,15 +66,7 @@ public class PurchaseOrderService {
     }
 
     public List<PurchaseOrder> getFilteredOrders(String status, String vendorId, String dateFrom, String dateTo) {
-        List<PurchaseOrder> all = purchaseOrderRepository.findAll();
-        all.sort((a, b) -> {
-            LocalDateTime da = a.getDate();
-            LocalDateTime db = b.getDate();
-            if (da == null && db == null) return 0;
-            if (da == null) return 1;
-            if (db == null) return -1;
-            return db.compareTo(da);
-        });
+        List<PurchaseOrder> all = purchaseOrderRepository.findAllByOrderByUpdatedAtDesc();
 
         return all.stream().filter(po -> {
             if (status != null && !status.isEmpty()) {
@@ -254,6 +251,8 @@ public class PurchaseOrderService {
 
         String userId = SecurityUtils.getCurrentUserId();
         boolean allFullyReceived = true;
+        
+        List<String> receivedLogDetails = new ArrayList<>();
 
         for (PurchaseOrderLine line : po.getLines()) {
             int toReceive = receipts.getOrDefault(line.getId(), 0);
@@ -276,6 +275,10 @@ public class PurchaseOrderService {
 
                 // Update line
                 line.setReceivedQty(line.getReceivedQty() + toReceive);
+                
+                Product prod = productRepository.findById(line.getProductId()).orElse(null);
+                String prodName = prod != null ? prod.getName() : line.getProductId();
+                receivedLogDetails.add(String.format("{\"productId\": \"%s\", \"productName\": \"%s\", \"receivedQty\": %d}", line.getProductId(), prodName, toReceive));
             }
 
             if (line.getReceivedQty() < line.getQty()) {
@@ -314,14 +317,41 @@ public class PurchaseOrderService {
                 saved.getId()
         );
 
+        String receiptJson = "[" + String.join(", ", receivedLogDetails) + "]";
+        
         auditLogService.logChange(
                 userId,
                 "PurchaseOrder",
                 saved.getId(),
                 "Received",
                 oldStatus,
-                newStatus
+                String.format("{\"newStatus\": \"%s\", \"receivedLines\": %s}", newStatus, receiptJson)
         );
+
+        // Resolve shortage tickets linked to this PO
+        if ("Fully Received".equals(newStatus)) {
+            List<ShortageTicket> tickets = shortageTicketRepository.findByPoId(saved.getId());
+            for (ShortageTicket ticket : tickets) {
+                if ("OPEN".equals(ticket.getStatus())) {
+                    ticket.setStatus("RESOLVED");
+                    shortageTicketRepository.save(ticket);
+                    // Notify the MO assignee
+                    ManufacturingOrder linkedMo = manufacturingOrderRepository.findById(ticket.getMoId()).orElse(null);
+                    if (linkedMo != null && linkedMo.getAssigneeId() != null) {
+                        Product shortProduct = productRepository.findById(ticket.getProductId()).orElse(null);
+                        String prodName = shortProduct != null ? shortProduct.getName() : ticket.getProductId();
+                        notificationService.createNotification(
+                                linkedMo.getAssigneeId(),
+                                "Shortage Resolved",
+                                String.format("Shortage of %s for MO %s has been resolved. PO %s is fully received.",
+                                        prodName, linkedMo.getNumber(), saved.getNumber()),
+                                "MANUFACTURING_ORDER",
+                                linkedMo.getId()
+                        );
+                    }
+                }
+            }
+        }
 
         // Unblock any MOs that were "Waiting for Materials" for received products
         for (PurchaseOrderLine line : saved.getLines()) {

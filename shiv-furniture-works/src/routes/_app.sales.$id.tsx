@@ -264,6 +264,14 @@ function SalesDetail() {
                                 <span>{l.autoCreatedOrderNumber} created</span>
                               )
                             }
+                            {l.autoCreatedOrderNumber?.startsWith("MO") && (() => {
+                              const mo = manufacturingOrders.find(m => m.id === l.autoCreatedOrderId);
+                              if (mo && mo.workOrders && mo.workOrders.length > 0) {
+                                const completed = mo.workOrders.filter(w => w.status === "Done" || w.status === "Completed").length;
+                                return ` — ${completed} of ${mo.workOrders.length} work orders complete`;
+                              }
+                              return null;
+                            })()}
                           </span>
                         )}
                       </div>

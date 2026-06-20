@@ -8,4 +8,5 @@ public interface BoMRepository extends JpaRepository<BoM, String> {
     Optional<BoM> findByProductId(String productId);
     Optional<BoM> findByProductIdAndIsActiveTrue(String productId);
     Optional<BoM> findFirstByOrderByBomReferenceDesc();
+    java.util.List<BoM> findAllByOrderByUpdatedAtDesc();
 }

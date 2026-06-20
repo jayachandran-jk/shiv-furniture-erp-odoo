@@ -47,10 +47,12 @@ public class ProcurementService {
         this.salesOrderRepository = salesOrderRepository;
     }
 
+    @Transactional
     public synchronized void checkAndTriggerProcurement(String productId) {
         checkAndTriggerProcurement(productId, "STOCK_CHANGE", null, null, new HashSet<>(), 0);
     }
 
+    @Transactional
     public synchronized void checkAndTriggerProcurement(String productId, String triggerType, String triggerEntityId, String parentEventId, Set<String> visited, int depth) {
         if (depth > 5) return;
         Product product = productRepository.findById(productId).orElse(null);
@@ -437,7 +439,8 @@ public class ProcurementService {
         return ae;
     }
 
-    private void checkAndTriggerProcurementOrInternal(Product product, int shortage, String triggeringSalesOrderId, String triggerType, String triggerEntityId, String parentEventId, Set<String> visited, int depth) {
+    @Transactional
+    protected void checkAndTriggerProcurementOrInternal(Product product, int shortage, String triggeringSalesOrderId, String triggerType, String triggerEntityId, String parentEventId, Set<String> visited, int depth) {
         if ("MTS".equalsIgnoreCase(product.getStrategy())) {
             int freeToUse = product.getOnHandQty() - product.getReservedQty();
             int threshold = product.getReorderThreshold();

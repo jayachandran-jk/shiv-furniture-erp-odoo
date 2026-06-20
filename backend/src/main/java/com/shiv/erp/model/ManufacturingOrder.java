@@ -48,4 +48,11 @@ public class ManufacturingOrder {
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     @JoinColumn(name = "mo_id")
     private List<WorkOrder> workOrders;
+
+    @org.hibernate.annotations.UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    @Transient
+    private List<ShortageTicket> shortageTickets;
 }

@@ -77,13 +77,7 @@ public class SimulationService {
     private void processManufacturingOrdersSimulation() {
         List<ManufacturingOrder> orders = manufacturingOrderRepository.findAll();
         for (ManufacturingOrder mo : orders) {
-            if ("Draft".equals(mo.getStatus())) {
-                try {
-                    manufacturingOrderService.confirmOrder(mo.getId());
-                } catch (Exception e) {
-                    // Ignore
-                }
-            } else if ("Confirmed".equals(mo.getStatus()) || "In Progress".equals(mo.getStatus())) {
+            if ("Confirmed".equals(mo.getStatus()) || "In Progress".equals(mo.getStatus())) {
                 boolean allWorkOrdersCompleted = true;
                 boolean anyWorkOrderRunning = false;
                 WorkOrder nextToStart = null;

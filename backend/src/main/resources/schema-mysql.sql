@@ -51,6 +51,8 @@ CREATE TABLE IF NOT EXISTS products (
     reorder_threshold INT DEFAULT 0,
     on_hand_qty INT DEFAULT 0,
     reserved_qty INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (preferred_vendor_id) REFERENCES vendors(id) ON DELETE SET NULL
 );
 
@@ -100,6 +102,7 @@ CREATE TABLE IF NOT EXISTS sales_orders (
     created_by VARCHAR(36),
     salesperson_id VARCHAR(36),
     date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
     FOREIGN KEY (salesperson_id) REFERENCES users(id) ON DELETE SET NULL
@@ -128,6 +131,7 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     created_by VARCHAR(36),
     is_auto_generated BOOLEAN DEFAULT FALSE,
     triggering_sales_order_id VARCHAR(50),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE CASCADE,
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
     FOREIGN KEY (triggering_sales_order_id) REFERENCES sales_orders(id) ON DELETE SET NULL
@@ -154,6 +158,7 @@ CREATE TABLE IF NOT EXISTS manufacturing_orders (
     date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_auto_generated BOOLEAN DEFAULT FALSE,
     triggering_sales_order_id VARCHAR(50),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
     FOREIGN KEY (assignee_id) REFERENCES users(id) ON DELETE SET NULL,
     FOREIGN KEY (triggering_sales_order_id) REFERENCES sales_orders(id) ON DELETE SET NULL
@@ -244,3 +249,17 @@ CREATE TABLE IF NOT EXISTS automation_events (
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL
 );
 
+CREATE TABLE IF NOT EXISTS shortage_tickets (
+    id VARCHAR(50) PRIMARY KEY,
+    mo_id VARCHAR(50) NOT NULL,
+    product_id VARCHAR(50) NOT NULL,
+    shortage_qty INT NOT NULL,
+    po_id VARCHAR(50),
+    po_number VARCHAR(100),
+    status VARCHAR(20) NOT NULL DEFAULT 'OPEN',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (mo_id) REFERENCES manufacturing_orders(id) ON DELETE CASCADE,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+    FOREIGN KEY (po_id) REFERENCES purchase_orders(id) ON DELETE SET NULL
+);

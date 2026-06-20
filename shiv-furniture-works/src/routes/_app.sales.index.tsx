@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useERP, useCurrentUser, freeToUse } from "@/lib/erp/store";
 import { hasPermission } from "@/lib/erp/permissions";
 import { DataTable, type Column } from "@/components/erp/DataTable";
@@ -18,8 +18,15 @@ const STATUSES: SoStatus[] = ["Draft", "Confirmed", "Partially Delivered", "Full
 
 function SalesPage() {
   const navigate = useNavigate();
-  const { salesOrders, customers, products, createSalesOrder } = useERP();
+  const { salesOrders, customers, products, createSalesOrder, refreshData } = useERP();
   const user = useCurrentUser();
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refreshData();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [refreshData]);
   const canWrite = hasPermission(user?.role, "sales:write");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
