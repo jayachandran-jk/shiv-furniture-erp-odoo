@@ -379,6 +379,21 @@ public class SalesOrderService {
             line.setDeliveredQty(line.getDeliveredQty() + toDeliver);
             line.setReservedQty(Math.max(0, line.getReservedQty() - toDeliver));
 
+            // Soft-hide the product from active operations since it is delivered to the customer
+            Product p = productRepository.findById(line.getProductId()).orElse(null);
+            if (p != null && Boolean.TRUE.equals(p.getIsActive())) {
+                p.setIsActive(false);
+                productRepository.save(p);
+                auditLogService.logChange(
+                        userId,
+                        "Product",
+                        p.getId(),
+                        "Soft-Hidden (Delivered)",
+                        "{\"isActive\": true}",
+                        "{\"isActive\": false}"
+                );
+            }
+
             if (line.getDeliveredQty() < line.getQty()) {
                 allFullyDelivered = false;
             }

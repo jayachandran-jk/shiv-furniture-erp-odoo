@@ -23,6 +23,8 @@ interface State {
   theme: "light" | "dark";
   sidebarCollapsed: boolean;
   tick: number; // forces re-render for live timers
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
 
   // actions
   login: (email: string, password: string) => Promise<boolean>;
@@ -88,7 +90,7 @@ async function apiCall(path: string, method: string = "GET", body?: any) {
   });
   if (!response.ok) {
     const errorBody = await response.json().catch(() => ({}));
-    throw new Error(errorBody.error || `HTTP error! status: ${response.status}`);
+    throw new Error(errorBody.message || errorBody.error || `HTTP error! status: ${response.status}`);
   }
   return response.json();
 }
@@ -285,6 +287,8 @@ export const useERP = create<State>()(
       theme: "light",
       sidebarCollapsed: false,
       tick: 0,
+      searchQuery: "",
+      setSearchQuery: (query) => set({ searchQuery: query }),
 
       login: async (email, password) => {
         try {
@@ -316,6 +320,7 @@ export const useERP = create<State>()(
           manufacturingOrders: [],
           ledger: [],
           audit: [],
+          searchQuery: "",
         });
       },
 
@@ -376,6 +381,7 @@ export const useERP = create<State>()(
             reorderThreshold: p.reorderThreshold,
             onHand: p.onHandQty,
             reserved: p.reservedQty,
+            isActive: p.isActive !== false,
           }));
 
           const mappedSalesOrders = (salesOrders || []).map((so: any) => ({
@@ -612,7 +618,7 @@ export const useERP = create<State>()(
       },
 
       setWorkOrderStatus: async (moId, woId, status) => {
-        const backendStatus = status === "Done" ? "Completed" : status;
+        const backendStatus = status;
         await apiCall(`/api/manufacturing/${moId}/work-orders/${woId}/status?status=${backendStatus}`, "POST");
         await get().refreshData();
       },

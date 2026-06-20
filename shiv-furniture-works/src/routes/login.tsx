@@ -1,7 +1,8 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useERP, useHasHydrated } from "@/lib/erp/store";
 import { Button, Field, Input } from "@/components/erp/ui";
+import { Home } from "lucide-react";
 
 export const Route = createFileRoute("/login")({
   head: () => ({ meta: [{ title: "Sign in — Shiv Furniture Works" }] }),
@@ -33,7 +34,16 @@ function LoginPage() {
   }
 
   return (
-    <div className="grid min-h-screen place-items-center bg-background px-4 text-foreground">
+    <div className="relative grid min-h-screen place-items-center bg-background px-4 text-foreground">
+      <div className="absolute top-6 left-6">
+        <Link
+          to="/"
+          className="inline-flex items-center gap-1.5 rounded-lg border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground animate-fade-in"
+        >
+          <Home className="h-3.5 w-3.5" />
+          Back to Home
+        </Link>
+      </div>
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <div className="mx-auto mb-3 grid h-10 w-10 place-items-center rounded-md bg-accent text-accent-foreground font-serif text-lg font-semibold">S</div>

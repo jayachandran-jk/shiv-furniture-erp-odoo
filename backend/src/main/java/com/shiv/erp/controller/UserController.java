@@ -70,6 +70,11 @@ public class UserController {
                     .body(Map.of("error", "User not found"));
         }
 
+        if (id.equals(SecurityUtils.getCurrentUserId())) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", "You cannot deactivate your own account"));
+        }
+
         boolean oldStatus = user.getIsActive();
         user.setIsActive(!oldStatus);
         User saved = userRepository.save(user);

@@ -267,7 +267,7 @@ function SalesDetail() {
                             {l.autoCreatedOrderNumber?.startsWith("MO") && (() => {
                               const mo = manufacturingOrders.find(m => m.id === l.autoCreatedOrderId);
                               if (mo && mo.workOrders && mo.workOrders.length > 0) {
-                                const completed = mo.workOrders.filter(w => w.status === "Done" || w.status === "Completed").length;
+                                const completed = mo.workOrders.filter(w => w.status === "Completed").length;
                                 return ` — ${completed} of ${mo.workOrders.length} work orders complete`;
                               }
                               return null;
@@ -446,7 +446,7 @@ function EditSO({
                     required
                   >
                     <option value="">Select product…</option>
-                    {products.map((p: any) => (
+                    {products.filter((p: any) => p.isActive !== false || p.id === line.productId).map((p: any) => (
                       <option key={p.id} value={p.id}>
                         {p.name} [{p.sku}]
                       </option>

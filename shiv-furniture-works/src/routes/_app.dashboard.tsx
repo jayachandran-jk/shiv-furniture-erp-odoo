@@ -42,7 +42,7 @@ function Dashboard() {
   const pendingDel = salesOrders.filter(s => s.status === "Confirmed" || s.status === "Partially Delivered");
   const openMO = manufacturingOrders.filter(s => s.status !== "Done" && s.status !== "Cancelled");
   const openPO = purchaseOrders.filter(s => s.status !== "Fully Received" && s.status !== "Cancelled");
-  const lowStock = products.filter(p => p.reorderThreshold > 0 && p.onHand <= p.reorderThreshold);
+  const lowStock = products.filter(p => p.isActive !== false && p.reorderThreshold > 0 && p.onHand <= p.reorderThreshold);
 
   // Revenue: sum of Confirmed + Partially Delivered + Fully Delivered SO line totals
   const revenue = salesOrders
@@ -80,9 +80,10 @@ function Dashboard() {
   const maxCount = Math.max(1, ...salesTrendData.map(d => d.count));
 
   // Inventory Health Pie chart setup
-  const totalProducts = products.length;
-  const outOfStockCount = products.filter(p => p.onHand <= 0).length;
-  const lowStockCount = products.filter(p => p.onHand > 0 && p.reorderThreshold > 0 && p.onHand <= p.reorderThreshold).length;
+  const activeProducts = products.filter(p => p.isActive !== false);
+  const totalProducts = activeProducts.length;
+  const outOfStockCount = activeProducts.filter(p => p.onHand <= 0).length;
+  const lowStockCount = activeProducts.filter(p => p.onHand > 0 && p.reorderThreshold > 0 && p.onHand <= p.reorderThreshold).length;
   const inStockCount = Math.max(0, totalProducts - outOfStockCount - lowStockCount);
 
   const oosPct = totalProducts ? (outOfStockCount / totalProducts) * 100 : 0;
@@ -120,7 +121,7 @@ function Dashboard() {
     let totalMs = 0, jobs = 0, pending = 0, done = 0;
     for (const mo of manufacturingOrders) for (const wo of mo.workOrders) {
       if (wo.workCenterId !== wc.id) continue;
-      if (wo.status === "Done") { done++; jobs++; totalMs += wo.accumulatedMs; }
+      if (wo.status === "Completed") { done++; jobs++; totalMs += wo.accumulatedMs; }
       else pending++;
     }
     const avgMin = jobs ? totalMs / jobs / 60000 : 0;

@@ -143,7 +143,7 @@ export function seedData() {
       assigneeId: "u-4", date: dayAgo(2),
       bomSnapshot: { components: boms[0].components, operations: boms[0].operations },
       workOrders: [
-        { id: "wo-1", name: "Cut planks to size", workCenterId: "wc-1", plannedMinutes: 90, status: "Done", accumulatedMs: 92 * 60000 },
+        { id: "wo-1", name: "Cut planks to size", workCenterId: "wc-1", plannedMinutes: 90, status: "Completed", accumulatedMs: 92 * 60000 },
         { id: "wo-2", name: "Sand all surfaces", workCenterId: "wc-3", plannedMinutes: 60, status: "Started", startedAt: now - 12 * 60000, accumulatedMs: 0 },
         { id: "wo-3", name: "Assemble table", workCenterId: "wc-2", plannedMinutes: 120, status: "Pending", accumulatedMs: 0 },
         { id: "wo-4", name: "Apply walnut finish", workCenterId: "wc-4", plannedMinutes: 150, status: "Pending", accumulatedMs: 0 },

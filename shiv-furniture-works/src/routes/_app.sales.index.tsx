@@ -18,9 +18,9 @@ const STATUSES: SoStatus[] = ["Draft", "Confirmed", "Partially Delivered", "Full
 
 function SalesPage() {
   const navigate = useNavigate();
-  const { salesOrders, customers, products, createSalesOrder, refreshData } = useERP();
+  const { salesOrders, customers, products, createSalesOrder, refreshData, searchQuery: query, setSearchQuery: setQuery } = useERP();
   const user = useCurrentUser();
-
+  
   useEffect(() => {
     const interval = setInterval(() => {
       refreshData();
@@ -28,7 +28,6 @@ function SalesPage() {
     return () => clearInterval(interval);
   }, [refreshData]);
   const canWrite = hasPermission(user?.role, "sales:write");
-  const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
   const [view, setView] = useState<"list" | "kanban">("list");
 

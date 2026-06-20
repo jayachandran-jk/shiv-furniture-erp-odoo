@@ -131,7 +131,7 @@ function mapLog(a: any): AuditEntry {
 /* ─────────────── main page ─────────────── */
 
 function AuditPage() {
-  const { users } = useERP();
+  const { users, searchQuery } = useERP();
 
   // filter state
   const [dateFrom, setDateFrom] = useState("");
@@ -149,15 +149,29 @@ function AuditPage() {
   const [isLive, setIsLive] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const userName = (id: string) => users.find(u => u.id === id)?.name || (id === "system" ? "System" : id);
-
-  const allModules = ["Sales", "Purchase", "Manufacturing", "Products", "Inventory", "Bill of Materials", "Settings"];
-
-  // Server state
-  const [kpis, setKpis] = useState({ total: 0, creates: 0, updates: 0, deletes: 0 });
-  const [pageRows, setPageRows] = useState<AuditEntry[]>([]);
   const [totalPages, setTotalPages] = useState(1);
   const [totalElements, setTotalElements] = useState(0);
+  const [kpis, setKpis] = useState({ total: 0, creates: 0, updates: 0, deletes: 0 });
+  const [pageRows, setPageRows] = useState<AuditEntry[]>([]);
+
+  const userName = (id: string) => users.find(u => u.id === id)?.name || (id === "system" ? "System" : id);
+
+  const filteredRows = useMemo(() => {
+    if (!searchQuery) return pageRows;
+    const q = searchQuery.toLowerCase().trim();
+    return pageRows.filter(a => 
+      a.userId.toLowerCase().includes(q) ||
+      userName(a.userId).toLowerCase().includes(q) ||
+      a.recordType.toLowerCase().includes(q) ||
+      a.recordId.toLowerCase().includes(q) ||
+      a.action.toLowerCase().includes(q) ||
+      (a.field && a.field.toLowerCase().includes(q)) ||
+      (a.oldValue && a.oldValue.toLowerCase().includes(q)) ||
+      (a.newValue && a.newValue.toLowerCase().includes(q))
+    );
+  }, [pageRows, searchQuery, users]);
+
+  const allModules = ["Sales", "Purchase", "Manufacturing", "Products", "Inventory", "Bill of Materials", "Settings"];
 
   const getAuthHeaders = (): HeadersInit => {
     const token = localStorage.getItem("token");
@@ -416,7 +430,7 @@ function AuditPage() {
                 </tr>
               </thead>
               <tbody>
-                {pageRows.map(a => {
+                {filteredRows.map(a => {
                   const oldNum = parseNumeric(a.oldValue);
                   const newNum = parseNumeric(a.newValue);
                   let newValueColor = "text-[#2B2622]";

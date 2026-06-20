@@ -1,0 +1,22 @@
+{
+  "productId": "p-f1",
+  "qtyProduced": 1.0,
+  "version": 1,
+  "isActive": true,
+  "notes": "hi",
+  "components": [
+    {
+      "productId": "p-f2",
+      "qty": 2.0,
+      "unitOfMeasure": "pcs",
+      "notes": "e.g. Back panel"
+    }
+  ],
+  "operations": [
+    {
+      "name": "Assembly",
+      "workCenterId": "wc-1",
+      "durationMinutes": 30
+    }
+  ]
+}

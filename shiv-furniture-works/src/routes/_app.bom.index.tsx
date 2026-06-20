@@ -14,11 +14,9 @@ export const Route = createFileRoute("/_app/bom/")({
 });
 
 function BomListPage() {
-  const { boms, products } = useERP();
+  const { boms, products, searchQuery: query, setSearchQuery: setQuery } = useERP();
   const user = useCurrentUser();
   const writable = hasPermission(user?.role, "bom:write");
-
-  const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [finishedProduct, setFinishedProduct] = useState("");
 

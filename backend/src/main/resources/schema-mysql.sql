@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS products (
     reorder_threshold INT DEFAULT 0,
     on_hand_qty INT DEFAULT 0,
     reserved_qty INT DEFAULT 0,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (preferred_vendor_id) REFERENCES vendors(id) ON DELETE SET NULL

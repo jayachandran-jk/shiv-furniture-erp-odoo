@@ -59,6 +59,10 @@ public class Product {
     @Builder.Default
     private Integer reservedQty = 0;
 
+    @Column(name = "is_active", nullable = false)
+    @Builder.Default
+    private Boolean isActive = true;
+
     @org.hibernate.annotations.CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private java.time.LocalDateTime createdAt;

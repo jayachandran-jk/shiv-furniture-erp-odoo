@@ -15,18 +15,18 @@ export const Route = createFileRoute("/_app/products")({
 });
 
 function ProductsPage() {
-  const { products, vendors, boms, createProduct, updateProduct, ledger } = useERP();
+  const { products, vendors, boms, createProduct, updateProduct, ledger, searchQuery: query, setSearchQuery: setQuery } = useERP();
   const user = useCurrentUser();
   const writable = hasPermission(user?.role, "products:write");
-  const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string>("");
   const [strategy, setStrategy] = useState<string>("");
   const [newOpen, setNewOpen] = useState(false);
   const [detail, setDetail] = useState<Product | null>(null);
 
-  const categories = Array.from(new Set(products.map(p => p.category)));
+  const categories = Array.from(new Set(products.filter(p => p.isActive !== false).map(p => p.category)));
 
   const filtered = useMemo(() => products.filter(p => {
+    if (p.isActive === false) return false;
     const q = query.trim().toLowerCase();
     if (q && !p.name.toLowerCase().includes(q) && !p.sku.toLowerCase().includes(q)) return false;
     if (category && p.category !== category) return false;
@@ -126,7 +126,7 @@ function ProductForm({ vendors, boms, products, onSubmit, initial }: {
   const [components, setComponents] = useState<{ productId: string; qty: number }[]>([]);
 
   // Available raw material products for component selection
-  const rawMaterials = (products || []).filter(p => p.id !== initial?.id);
+  const rawMaterials = (products || []).filter(p => p.id !== initial?.id && (p.isActive !== false || components.some(c => c.productId === p.id)));
 
   const addComponent = () => setComponents([...components, { productId: rawMaterials[0]?.id || "", qty: 1 }]);
   const removeComponent = (i: number) => setComponents(components.filter((_, idx) => idx !== i));

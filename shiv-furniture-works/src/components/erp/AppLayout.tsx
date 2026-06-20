@@ -60,7 +60,7 @@ export function AppLayout() {
   const user = useCurrentUser();
   const hydrated = useHasHydrated();
   const navigate = useNavigate();
-  const { currentUserId, theme, setTheme, sidebarCollapsed, toggleSidebar, logout, bumpTick, refreshData } = useERP();
+  const { currentUserId, theme, setTheme, sidebarCollapsed, toggleSidebar, logout, bumpTick, refreshData, searchQuery, setSearchQuery } = useERP();
   const pathname = useRouterState({ select: s => s.location.pathname });
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -252,6 +252,8 @@ export function AppLayout() {
             <input
               ref={searchRef}
               placeholder="Search   (press /)"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
               className="h-8 w-full rounded-md border bg-background pl-8 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>

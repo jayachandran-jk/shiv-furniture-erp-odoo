@@ -28,6 +28,7 @@ export interface Product {
   onHand: number;
   reserved: number;
   components?: BomComponent[]; // transient — used only during product creation
+  isActive?: boolean;
 }
 
 export interface Vendor {
@@ -128,7 +129,7 @@ export interface PurchaseOrder {
   triggeringSalesOrderId?: string;
 }
 
-export type WoStatus = "Pending" | "Started" | "Paused" | "Done";
+export type WoStatus = "Pending" | "Started" | "Paused" | "Completed";
 export interface WorkOrder {
   id: string;
   name: string;

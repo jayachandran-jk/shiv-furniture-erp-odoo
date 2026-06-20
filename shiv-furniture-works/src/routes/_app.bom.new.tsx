@@ -37,12 +37,12 @@ function NewBomPage() {
 
   // Product helpers
   const finishedProducts = useMemo(() => {
-    return products.filter(p => p.procurementType === "Manufacturing");
+    return products.filter(p => p.procurementType === "Manufacturing" && p.isActive !== false);
   }, [products]);
 
   const rawMaterials = useMemo(() => {
-    return products.filter(p => p.procurementType !== "Manufacturing" || p.id !== productId);
-  }, [products, productId]);
+    return products.filter(p => (p.procurementType !== "Manufacturing" || p.id !== productId) && (p.isActive !== false || components.some(c => c.productId === p.id)));
+  }, [products, productId, components]);
 
   const productName = (id: string) => products.find(p => p.id === id)?.name || id;
 
@@ -77,7 +77,7 @@ function NewBomPage() {
     setComponents(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Add Operation row
+  // Add Operation row — name is auto-derived from the work center
   const addOperation = () => {
     const firstWc = workCenters[0];
     const newSeq = (operations.length + 1) * 10;
@@ -86,7 +86,7 @@ function NewBomPage() {
       {
         id: `op-new-${Math.random().toString(36).substring(2, 6)}`,
         sequence: newSeq,
-        name: "",
+        name: firstWc?.name || "",
         workCenterId: firstWc?.id || "",
         durationMinutes: 30,
         notes: ""
@@ -205,11 +205,15 @@ function NewBomPage() {
       return;
     }
 
-    // Auto-sequence operations
-    const formattedOps = operations.map((op, idx) => ({
-      ...op,
-      sequence: (idx + 1) * 10
-    }));
+    // Auto-sequence operations and ensure name is populated from work center if blank
+    const formattedOps = operations.map((op, idx) => {
+      const wc = workCenters.find(w => w.id === op.workCenterId);
+      return {
+        ...op,
+        sequence: (idx + 1) * 10,
+        name: op.name || wc?.name || `Step ${idx + 1}`
+      };
+    });
 
     try {
       await upsertBom({
@@ -379,10 +383,15 @@ function NewBomPage() {
                             <div className="relative inline-block w-full">
                               <Input
                                 type="number"
-                                min={0.0001}
-                                step={0.0001}
+                                min={1}
+                                step={1}
                                 value={c.qty}
-                                onChange={e => updateComponent(idx, { qty: parseFloat(e.target.value) || 0 })}
+                                onChange={e => {
+                                  // Parse and round to 2dp to prevent floating-point drift
+                                  const raw = parseFloat(e.target.value);
+                                  const rounded = isNaN(raw) ? 1 : Math.round(raw * 100) / 100;
+                                  updateComponent(idx, { qty: rounded });
+                                }}
                                 className={`text-right w-full ${isStockLow ? "border-warning bg-warning/5 pr-7" : ""}`}
                               />
                               {isStockLow && (
@@ -450,9 +459,10 @@ function NewBomPage() {
                 {operations.map((op, idx) => (
                   <div
                     key={op.id}
-                    className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-3 shadow-sm align-middle"
+                    className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-3 shadow-sm"
                   >
-                    <div className="flex items-center gap-1.5">
+                    {/* Sequence badge + reorder arrows */}
+                    <div className="flex items-center gap-1.5 shrink-0">
                       <span className="font-mono text-xs font-semibold bg-muted px-2 py-1 rounded text-muted-foreground">
                         {op.sequence}
                       </span>
@@ -478,50 +488,47 @@ function NewBomPage() {
                       </div>
                     </div>
 
-                    <div className="flex-1 min-w-[200px]">
-                      <Input
-                        placeholder="Operation Name (e.g. Cut boards to length)"
-                        value={op.name}
-                        onChange={e => updateOperation(idx, { name: e.target.value })}
-                        required
-                        className="w-full"
-                      />
-                    </div>
-
-                    <div className="w-44">
+                    {/* Work Center dropdown — name auto-derived from selection */}
+                    <div className="flex-1 min-w-[180px]">
                       <Select
                         value={op.workCenterId}
-                        onChange={e => updateOperation(idx, { workCenterId: e.target.value })}
+                        onChange={e => {
+                          const wc = workCenters.find(w => w.id === e.target.value);
+                          updateOperation(idx, {
+                            workCenterId: e.target.value,
+                            name: wc?.name || op.name  // auto-set name from work center
+                          });
+                        }}
                         required
                       >
                         {workCenters.map(wc => (
-                          <option key={wc.id} value={wc.id}>
-                            {wc.name}
-                          </option>
+                          <option key={wc.id} value={wc.id}>{wc.name}</option>
                         ))}
                       </Select>
                     </div>
 
-                    <div className="w-28 flex items-center gap-1">
+                    {/* Duration input */}
+                    <div className="w-28 flex items-center gap-1 shrink-0">
                       <Input
                         type="number"
                         min={1}
                         step={1}
                         value={op.durationMinutes}
-                        onChange={e => updateOperation(idx, { durationMinutes: parseInt(e.target.value) || 0 })}
+                        onChange={e => updateOperation(idx, { durationMinutes: parseInt(e.target.value) || 1 })}
                         required
                         className="text-right w-full"
                       />
-                      <span className="text-xs text-muted-foreground">min</span>
+                      <span className="text-xs text-muted-foreground shrink-0">min</span>
                     </div>
 
-                    <div>
+                    {/* Delete */}
+                    <div className="shrink-0">
                       <button
                         type="button"
                         onClick={() => removeOperation(idx)}
                         className="text-muted-foreground hover:text-destructive p-1.5 rounded hover:bg-muted"
                       >
-                        <Trash2 className="h-4.5 w-4.5" />
+                        <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
                   </div>

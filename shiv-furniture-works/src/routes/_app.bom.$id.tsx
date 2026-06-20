@@ -83,8 +83,8 @@ function BomDetailEditPage() {
   const productSku = (pid: string) => products.find(p => p.id === pid)?.sku || "";
 
   const rawMaterials = useMemo(() => {
-    return products.filter(p => p.procurementType !== "Manufacturing" || p.id !== originalBom.productId);
-  }, [products, originalBom.productId]);
+    return products.filter(p => (p.procurementType !== "Manufacturing" || p.id !== originalBom.productId) && (p.isActive !== false || components.some(c => c.productId === p.id)));
+  }, [products, originalBom.productId, components]);
 
   const getProductFreeQty = (pid: string) => {
     const p = products.find(x => x.id === pid);

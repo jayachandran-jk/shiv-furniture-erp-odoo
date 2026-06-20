@@ -173,8 +173,8 @@ function EditPO({ po, vendors, products, onSubmit }: {
   const [vendorId, setVendorId] = useState(po.vendorId);
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState(po.expectedDeliveryDate ? format(new Date(po.expectedDeliveryDate), "yyyy-MM-dd") : "");
   const [notes, setNotes] = useState(po.notes || "");
-  const purchaseable = products.filter((p: any) => p.procurementType === "Purchase");
   const [lines, setLines] = useState(po.lines.map((l: any) => ({ productId: l.productId, qty: l.qty, unitPrice: l.unitPrice })));
+  const purchaseable = products.filter((p: any) => p.procurementType === "Purchase" && (p.isActive !== false || lines.some((l: any) => l.productId === p.id)));
 
   const total = lines.reduce((a: number, l: any) => a + l.qty * l.unitPrice, 0);
 
@@ -205,7 +205,7 @@ function EditPO({ po, vendors, products, onSubmit }: {
                     const p = products.find((x: any) => x.id === e.target.value);
                     setLines((ls: any) => ls.map((l: any, idx: number) => idx === i ? { ...l, productId: e.target.value, unitPrice: p?.costPrice || 0 } : l));
                     if (p?.preferredVendorId) {
-                      setVendorId(prev => prev || p.preferredVendorId);
+                      setVendorId((prev: string) => prev || (p.preferredVendorId || ""));
                     }
                   }}>
                     {purchaseable.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}

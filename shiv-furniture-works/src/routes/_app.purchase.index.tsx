@@ -15,10 +15,9 @@ export const Route = createFileRoute("/_app/purchase/")({
 });
 
 function PurchasePage() {
-  const { purchaseOrders, vendors, products, salesOrders, createPurchaseOrder, createVendor } = useERP();
+  const { purchaseOrders, vendors, products, salesOrders, createPurchaseOrder, createVendor, searchQuery: query, setSearchQuery: setQuery } = useERP();
   const user = useCurrentUser();
   const writable = hasPermission(user?.role, "purchase:write");
-  const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
   const [vendorId, setVendorId] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -109,7 +108,7 @@ function NewPO({ vendors, products, createVendor, onSubmit }: {
   const [vendorId, setVendorId] = useState(vendors[0]?.id || "");
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState("");
   const [notes, setNotes] = useState("");
-  const purchaseable = products.filter((p: any) => p.procurementType === "Purchase");
+  const purchaseable = products.filter((p: any) => p.procurementType === "Purchase" && p.isActive !== false);
   const [lines, setLines] = useState([{ productId: purchaseable[0]?.id || "", qty: 1, unitPrice: purchaseable[0]?.costPrice || 0 }]);
   const { boms } = useERP();
   const [vendorModalOpen, setVendorModalOpen] = useState(false);
@@ -121,7 +120,7 @@ function NewPO({ vendors, products, createVendor, onSubmit }: {
       .then(data => {
         if (Array.isArray(data)) {
           setVendorOptions(data);
-          setVendorId(prev => (!prev && data.length > 0 ? data[0].id : prev));
+          setVendorId((prev: string) => (!prev && data.length > 0 ? data[0].id : prev));
         }
       }).catch(console.error);
   }, []);
@@ -187,7 +186,7 @@ function NewPO({ vendors, products, createVendor, onSubmit }: {
                       const p = products.find((x: any) => x.id === e.target.value);
                       setLines(ls => ls.map((l, idx) => idx === i ? { ...l, productId: e.target.value, unitPrice: p?.costPrice || 0 } : l));
                       if (p?.preferredVendorId) {
-                        setVendorId(prev => prev || p.preferredVendorId);
+                        setVendorId((prev: string) => prev || (p.preferredVendorId || ""));
                       }
                     }}>
                       {purchaseable.map((p: any) => {

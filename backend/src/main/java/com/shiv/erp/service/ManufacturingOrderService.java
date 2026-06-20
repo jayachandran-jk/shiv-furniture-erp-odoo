@@ -353,9 +353,10 @@ public class ManufacturingOrderService {
         String userId = SecurityUtils.getCurrentUserId();
 
         // Validate that all work orders are completed before allowing MO completion
+        // Accept both "Completed" (set via UI) and "Done" (set via seed/legacy data)
         if (mo.getWorkOrders() != null) {
             for (WorkOrder wo : mo.getWorkOrders()) {
-                if (!"Completed".equals(wo.getStatus())) {
+                if (!"Completed".equals(wo.getStatus()) && !"Done".equals(wo.getStatus())) {
                     throw new IllegalStateException("All work orders must be completed before the manufacturing order can be marked as Done.");
                 }
             }
@@ -394,7 +395,7 @@ public class ManufacturingOrderService {
         if (mo.getWorkOrders() != null) {
             LocalDateTime now = LocalDateTime.now();
             for (WorkOrder wo : mo.getWorkOrders()) {
-                if (!"Completed".equals(wo.getStatus())) {
+                if (!"Completed".equals(wo.getStatus()) && !"Done".equals(wo.getStatus())) {
                     if ("Started".equals(wo.getStatus()) && wo.getStartedAt() != null) {
                         long minutes = Duration.between(wo.getStartedAt(), now).toMinutes();
                         wo.setActualDurationMinutes(wo.getActualDurationMinutes() + (int) minutes);

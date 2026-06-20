@@ -125,11 +125,13 @@ export function Section({ title, actions, children, className }: { title?: strin
 
 export function StatusStepper({ steps, current }: { steps: string[]; current: string }) {
   const idx = steps.indexOf(current);
+  // When on the last step, show it as done too (all steps checked)
+  const isLastStep = idx === steps.length - 1;
   return (
     <ol className="flex flex-wrap items-center gap-2 text-xs">
       {steps.map((s, i) => {
-        const done = i < idx;
-        const active = i === idx;
+        const done = i < idx || (isLastStep && i === idx);
+        const active = i === idx && !isLastStep;
         return (
           <li key={s} className="flex items-center gap-2">
             <span className={cn(
@@ -138,7 +140,7 @@ export function StatusStepper({ steps, current }: { steps: string[]; current: st
               active && "border-accent bg-accent text-accent-foreground",
               !done && !active && "border-border bg-muted text-muted-foreground",
             )}>{done ? "✓" : i + 1}</span>
-            <span className={cn("font-medium", active ? "text-foreground" : "text-muted-foreground")}>{s}</span>
+            <span className={cn("font-medium", (active || done) ? "text-foreground" : "text-muted-foreground")}>{s}</span>
             {i < steps.length - 1 && <span className="mx-1 text-muted-foreground">›</span>}
           </li>
         );

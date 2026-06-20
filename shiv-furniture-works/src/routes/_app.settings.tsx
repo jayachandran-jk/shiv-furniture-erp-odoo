@@ -42,7 +42,18 @@ function SettingsPage() {
                   <td className="px-3 py-2"><span className="rounded-md border border-border bg-muted px-2 py-0.5 text-[11px] font-medium uppercase">{u.role}</span></td>
                   <td className="px-3 py-2">
                     <label className="inline-flex items-center gap-2 text-xs">
-                      <input type="checkbox" checked={u.active} onChange={() => toggleUserActive(u.id)} />
+                      <input
+                        type="checkbox"
+                        checked={u.active}
+                        disabled={u.id === user?.id}
+                        onChange={async () => {
+                          try {
+                            await toggleUserActive(u.id);
+                          } catch (err: any) {
+                            alert(err.message || "Failed to toggle active status");
+                          }
+                        }}
+                      />
                       {u.active ? "Active" : "Disabled"}
                     </label>
                   </td>
@@ -54,27 +65,63 @@ function SettingsPage() {
       </section>
 
       <Sheet open={open} onClose={() => setOpen(false)} title="Add user">
-        <NewUserForm onSubmit={(u) => { createUser(u); setOpen(false); }} />
+        <NewUserForm onSubmit={createUser} onClose={() => setOpen(false)} />
       </Sheet>
     </div>
   );
 }
 
-function NewUserForm({ onSubmit }: { onSubmit: (u: { name: string; email: string; role: Role; active: boolean; password: string }) => void }) {
+function NewUserForm({
+  onSubmit,
+  onClose,
+}: {
+  onSubmit: (u: { name: string; email: string; role: Role; active: boolean; password: string }) => Promise<void>;
+  onClose: () => void;
+}) {
   const [f, setF] = useState({ name: "", email: "", password: "", role: "operations" as Role, active: true });
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      await onSubmit(f);
+      onClose();
+    } catch (err: any) {
+      setError(err.message || "Failed to create user");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <form onSubmit={e => { e.preventDefault(); onSubmit(f); }} className="space-y-3">
-      <Field label="Full name"><Input required value={f.name} onChange={e => setF({ ...f, name: e.target.value })} /></Field>
-      <Field label="Email"><Input type="email" required value={f.email} onChange={e => setF({ ...f, email: e.target.value })} /></Field>
-      <Field label="Password"><Input type="text" required value={f.password} onChange={e => setF({ ...f, password: e.target.value })} /></Field>
+    <form onSubmit={handleSubmit} className="space-y-3">
+      {error && (
+        <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive font-medium">
+          {error}
+        </div>
+      )}
+      <Field label="Full name">
+        <Input required value={f.name} disabled={loading} onChange={e => setF({ ...f, name: e.target.value })} />
+      </Field>
+      <Field label="Email">
+        <Input type="email" required value={f.email} disabled={loading} onChange={e => setF({ ...f, email: e.target.value })} />
+      </Field>
+      <Field label="Password">
+        <Input type="text" required value={f.password} disabled={loading} onChange={e => setF({ ...f, password: e.target.value })} />
+      </Field>
       <Field label="Role">
-        <Select value={f.role} onChange={e => setF({ ...f, role: e.target.value as Role })}>
+        <Select value={f.role} disabled={loading} onChange={e => setF({ ...f, role: e.target.value as Role })}>
           <option value="admin">Admin — full access</option>
           <option value="operations">Operations — full CRUD except settings</option>
           <option value="owner">Owner — read-only</option>
         </Select>
       </Field>
-      <Button type="submit" variant="primary">Create user</Button>
+      <Button type="submit" variant="primary" disabled={loading}>
+        {loading ? "Creating..." : "Create user"}
+      </Button>
     </form>
   );
 }
