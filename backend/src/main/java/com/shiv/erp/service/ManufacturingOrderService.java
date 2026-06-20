@@ -201,6 +201,17 @@ public class ManufacturingOrderService {
             targetWo.setOperatorId(SecurityUtils.getCurrentUserId());
         }
 
+        if (!status.equals(oldStatus)) {
+            auditLogService.logChange(
+                    operatorId != null ? operatorId : SecurityUtils.getCurrentUserId(),
+                    "WorkOrder",
+                    targetWo.getId(),
+                    "StatusChanged",
+                    oldStatus,
+                    status
+            );
+        }
+
         if ("Started".equals(status)) {
             targetWo.setStartedAt(now);
             targetWo.setPausedAt(null);

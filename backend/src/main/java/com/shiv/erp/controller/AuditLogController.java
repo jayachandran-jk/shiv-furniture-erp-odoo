@@ -68,8 +68,32 @@ public class AuditLogController {
                 predicates.add(cb.equal(root.get("userId"), user));
             }
             if (module != null && !module.isEmpty()) {
-                String entityType = mapModuleToEntityType(module);
-                predicates.add(cb.equal(root.get("entityType"), entityType));
+                String moduleLower = module.toLowerCase();
+                if (moduleLower.equals("sales")) {
+                    predicates.add(cb.equal(root.get("entityType"), "SalesOrder"));
+                } else if (moduleLower.equals("purchase")) {
+                    predicates.add(cb.or(
+                        cb.equal(root.get("entityType"), "PurchaseOrder"),
+                        cb.equal(root.get("entityType"), "Vendor")
+                    ));
+                } else if (moduleLower.equals("manufacturing")) {
+                    predicates.add(cb.or(
+                        cb.equal(root.get("entityType"), "ManufacturingOrder"),
+                        cb.equal(root.get("entityType"), "WorkCenter"),
+                        cb.equal(root.get("entityType"), "WorkOrder")
+                    ));
+                } else if (moduleLower.equals("products")) {
+                    predicates.add(cb.equal(root.get("entityType"), "Product"));
+                } else if (moduleLower.equals("settings")) {
+                    predicates.add(cb.equal(root.get("entityType"), "User"));
+                } else if (moduleLower.equals("bill of materials") || moduleLower.equals("billofmaterials")) {
+                    predicates.add(cb.or(
+                        cb.equal(root.get("entityType"), "BoM"),
+                        cb.equal(root.get("entityType"), "BILL_OF_MATERIALS")
+                    ));
+                } else {
+                    predicates.add(cb.equal(root.get("entityType"), module));
+                }
             }
             if (action != null && !action.isEmpty()) {
                 String actionLower = action.toLowerCase();

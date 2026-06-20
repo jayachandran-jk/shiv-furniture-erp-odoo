@@ -23,6 +23,68 @@ function parseNumeric(s?: string | null): number | null {
   return isNaN(n) ? null : n;
 }
 
+export function formatAuditChanges(oldValStr: string | undefined, newValStr: string | undefined) {
+  let field = "—";
+  let oldValue = oldValStr || "";
+  let newValue = newValStr || "";
+
+  const cleanJsonString = (s: string) => {
+    if (!s) return s;
+    if (s.startsWith("\"") && s.endsWith("\"")) return s.slice(1, -1);
+    return s;
+  };
+
+  const isJson = (str: string) => {
+    const s = str.trim();
+    return (s.startsWith("{") && s.endsWith("}")) || (s.startsWith("[") && s.endsWith("]"));
+  };
+
+  try {
+    if (oldValStr && newValStr && isJson(oldValStr) && isJson(newValStr)) {
+      const oldObj = JSON.parse(oldValStr);
+      const newObj = JSON.parse(newValStr);
+      
+      const changedFields: string[] = [];
+      const oldValues: string[] = [];
+      const newValues: string[] = [];
+
+      for (const key of Object.keys(newObj)) {
+        const oldValJson = JSON.stringify(oldObj[key]);
+        const newValJson = JSON.stringify(newObj[key]);
+        
+        if (oldValJson !== newValJson) {
+          changedFields.push(key);
+          oldValues.push(`${key}: ${oldObj[key] !== undefined ? oldObj[key] : 'none'}`);
+          newValues.push(`${key}: ${newObj[key] !== undefined ? newObj[key] : 'none'}`);
+        }
+      }
+
+      if (changedFields.length > 0) {
+        field = changedFields.join(", ");
+        oldValue = oldValues.join(", ");
+        newValue = newValues.join(", ");
+      } else {
+        oldValue = cleanJsonString(oldValStr);
+        newValue = cleanJsonString(newValStr);
+      }
+    } else if (newValStr && isJson(newValStr) && !oldValStr) {
+      const newObj = JSON.parse(newValStr);
+      const fields = Object.keys(newObj);
+      field = fields.join(", ");
+      newValue = fields.map(k => `${k}: ${newObj[k]}`).join(", ");
+      oldValue = "—";
+    } else {
+      oldValue = cleanJsonString(oldValStr || "");
+      newValue = cleanJsonString(newValStr || "");
+    }
+  } catch (e) {
+    oldValue = cleanJsonString(oldValStr || "");
+    newValue = cleanJsonString(newValStr || "");
+  }
+
+  return { field, oldValue: oldValue || "—", newValue: newValue || "—" };
+}
+
 function ActionBadge({ action }: { action: string }) {
   const lower = action.toLowerCase();
   let cls = "bg-gray-50 text-gray-700 border-gray-200";
@@ -55,7 +117,7 @@ function AuditPage() {
 
   const userName = (id: string) => users.find(u => u.id === id)?.name || id;
 
-  const allModules = ["Sales", "Purchase", "Manufacturing", "Products", "Inventory"];
+  const allModules = ["Sales", "Purchase", "Manufacturing", "Products", "Inventory", "Bill of Materials", "Settings"];
 
   // Server state
   const [kpis, setKpis] = useState({ total: 0, creates: 0, updates: 0, deletes: 0 });
@@ -113,16 +175,12 @@ function AuditPage() {
             const et = a.entityType;
             if (et === "Product") mod = "Products";
             else if (et === "SalesOrder") mod = "Sales";
-            else if (et === "PurchaseOrder") mod = "Purchase";
-            else if (et === "ManufacturingOrder") mod = "Manufacturing";
+            else if (et === "PurchaseOrder" || et === "Vendor") mod = "Purchase";
+            else if (et === "ManufacturingOrder" || et === "WorkCenter" || et === "WorkOrder") mod = "Manufacturing";
             else if (et === "User") mod = "Settings";
-            else if (et === "BoM") mod = "BillOfMaterials";
+            else if (et === "BoM" || et === "BILL_OF_MATERIALS") mod = "Bill of Materials";
 
-            const cleanJsonString = (s: string) => {
-              if (!s) return s;
-              if (s.startsWith("\"") && s.endsWith("\"")) return s.slice(1, -1);
-              return s;
-            };
+            const formatted = formatAuditChanges(a.oldValue, a.newValue);
 
             return {
               id: a.id,
@@ -132,8 +190,9 @@ function AuditPage() {
               recordType: a.entityType,
               recordId: a.entityId,
               action: a.action,
-              oldValue: cleanJsonString(a.oldValue),
-              newValue: cleanJsonString(a.newValue),
+              field: formatted.field,
+              oldValue: formatted.oldValue,
+              newValue: formatted.newValue,
             };
           });
           setPageRows(mappedLogs);
@@ -315,13 +374,13 @@ function AuditPage() {
                         <ActionBadge action={a.action} />
                       </td>
                       <td className="px-3 py-2.5 text-sm text-[#2B2622]">
-                        {isCreatedOrDeleted ? <span className="text-gray-300">—</span> : (a.field || <span className="text-gray-300">—</span>)}
+                        {a.field || <span className="text-gray-300">—</span>}
                       </td>
                       <td className="px-3 py-2.5 text-sm text-[#2B2622]">
-                        {isCreatedOrDeleted || !a.oldValue ? <span className="text-gray-300">—</span> : a.oldValue}
+                        {a.oldValue || <span className="text-gray-300">—</span>}
                       </td>
-                      <td className={`px-3 py-2.5 text-sm ${isCreatedOrDeleted || !a.newValue ? "" : newValueColor}`}>
-                        {isCreatedOrDeleted || !a.newValue ? <span className="text-gray-300">—</span> : a.newValue}
+                      <td className={`px-3 py-2.5 text-sm ${newValueColor}`}>
+                        {a.newValue || <span className="text-gray-300">—</span>}
                       </td>
                     </tr>
                   );

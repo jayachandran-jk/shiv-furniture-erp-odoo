@@ -165,23 +165,79 @@ function mapLedgerEntry(l: any): LedgerEntry {
   };
 }
 
+function formatAuditChanges(oldValStr: string | undefined, newValStr: string | undefined) {
+  let field = "—";
+  let oldValue = oldValStr || "";
+  let newValue = newValStr || "";
+
+  const cleanJsonString = (s: string) => {
+    if (!s) return s;
+    if (s.startsWith("\"") && s.endsWith("\"")) return s.slice(1, -1);
+    return s;
+  };
+
+  const isJson = (str: string) => {
+    const s = str.trim();
+    return (s.startsWith("{") && s.endsWith("}")) || (s.startsWith("[") && s.endsWith("]"));
+  };
+
+  try {
+    if (oldValStr && newValStr && isJson(oldValStr) && isJson(newValStr)) {
+      const oldObj = JSON.parse(oldValStr);
+      const newObj = JSON.parse(newValStr);
+      
+      const changedFields: string[] = [];
+      const oldValues: string[] = [];
+      const newValues: string[] = [];
+
+      for (const key of Object.keys(newObj)) {
+        const oldValJson = JSON.stringify(oldObj[key]);
+        const newValJson = JSON.stringify(newObj[key]);
+        
+        if (oldValJson !== newValJson) {
+          changedFields.push(key);
+          oldValues.push(`${key}: ${oldObj[key] !== undefined ? oldObj[key] : 'none'}`);
+          newValues.push(`${key}: ${newObj[key] !== undefined ? newObj[key] : 'none'}`);
+        }
+      }
+
+      if (changedFields.length > 0) {
+        field = changedFields.join(", ");
+        oldValue = oldValues.join(", ");
+        newValue = newValues.join(", ");
+      } else {
+        oldValue = cleanJsonString(oldValStr);
+        newValue = cleanJsonString(newValStr);
+      }
+    } else if (newValStr && isJson(newValStr) && !oldValStr) {
+      const newObj = JSON.parse(newValStr);
+      const fields = Object.keys(newObj);
+      field = fields.join(", ");
+      newValue = fields.map(k => `${k}: ${newObj[k]}`).join(", ");
+      oldValue = "—";
+    } else {
+      oldValue = cleanJsonString(oldValStr || "");
+      newValue = cleanJsonString(newValStr || "");
+    }
+  } catch (e) {
+    oldValue = cleanJsonString(oldValStr || "");
+    newValue = cleanJsonString(newValStr || "");
+  }
+
+  return { field, oldValue: oldValue || "—", newValue: newValue || "—" };
+}
+
 function mapAuditEntry(a: any): AuditEntry {
   let module = "System";
   const et = a.entityType;
   if (et === "Product") module = "Products";
   else if (et === "SalesOrder") module = "Sales";
-  else if (et === "PurchaseOrder") module = "Purchase";
-  else if (et === "ManufacturingOrder") module = "Manufacturing";
+  else if (et === "PurchaseOrder" || et === "Vendor") module = "Purchase";
+  else if (et === "ManufacturingOrder" || et === "WorkCenter" || et === "WorkOrder") module = "Manufacturing";
   else if (et === "User") module = "Settings";
-  else if (et === "BoM") module = "BillOfMaterials";
+  else if (et === "BoM" || et === "BILL_OF_MATERIALS") module = "Bill of Materials";
 
-  const cleanJsonString = (s: string) => {
-    if (!s) return s;
-    if (s.startsWith("\"") && s.endsWith("\"")) {
-      return s.slice(1, -1);
-    }
-    return s;
-  };
+  const formatted = formatAuditChanges(a.oldValue, a.newValue);
 
   return {
     id: a.id,
@@ -191,8 +247,9 @@ function mapAuditEntry(a: any): AuditEntry {
     recordType: a.entityType,
     recordId: a.entityId,
     action: a.action,
-    oldValue: cleanJsonString(a.oldValue),
-    newValue: cleanJsonString(a.newValue),
+    field: formatted.field,
+    oldValue: formatted.oldValue,
+    newValue: formatted.newValue,
   };
 }
 

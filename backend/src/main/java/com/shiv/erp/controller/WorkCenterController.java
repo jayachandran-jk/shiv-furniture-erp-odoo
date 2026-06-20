@@ -2,6 +2,8 @@ package com.shiv.erp.controller;
 
 import com.shiv.erp.model.WorkCenter;
 import com.shiv.erp.repository.WorkCenterRepository;
+import com.shiv.erp.service.AuditLogService;
+import com.shiv.erp.utils.SecurityUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -16,9 +18,11 @@ import java.util.UUID;
 public class WorkCenterController {
 
     private final WorkCenterRepository workCenterRepository;
+    private final AuditLogService auditLogService;
 
-    public WorkCenterController(WorkCenterRepository workCenterRepository) {
+    public WorkCenterController(WorkCenterRepository workCenterRepository, AuditLogService auditLogService) {
         this.workCenterRepository = workCenterRepository;
+        this.auditLogService = auditLogService;
     }
 
     @GetMapping
@@ -43,6 +47,16 @@ public class WorkCenterController {
         }
 
         WorkCenter saved = workCenterRepository.save(workCenter);
+
+        auditLogService.logChange(
+                SecurityUtils.getCurrentUserId(),
+                "WorkCenter",
+                saved.getId(),
+                "Created",
+                null,
+                String.format("{\"name\": \"%s\"}", saved.getName())
+        );
+
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
 }
