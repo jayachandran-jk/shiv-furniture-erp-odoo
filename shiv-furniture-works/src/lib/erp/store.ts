@@ -126,7 +126,7 @@ function mapManufacturingOrder(mo: any): ManufacturingOrder {
       name: w.name,
       workCenterId: w.workCenterId,
       plannedMinutes: w.expectedDurationMinutes,
-      status: w.status === "Completed" ? "Done" : w.status,
+      status: (w.status === "Completed" || w.status === "Done") ? "Completed" : w.status,
       startedAt: w.startedAt ? new Date(w.startedAt).getTime() : undefined,
       completedAt: w.completedAt ? new Date(w.completedAt).getTime() : undefined,
       accumulatedMs: (w.actualDurationMinutes || 0) * 60000,
