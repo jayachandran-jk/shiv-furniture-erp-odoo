@@ -2,8 +2,9 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
 import { useERP } from "@/lib/erp/store";
 import { Button, Field, Input, Select, Textarea, Modal } from "@/components/erp/ui";
-import { Plus, Trash2, ArrowUp, ArrowDown, ArrowLeft, AlertCircle, Check, Wrench } from "lucide-react";
+import { Plus, Trash2, ArrowUp, ArrowDown, ArrowLeft, AlertCircle, Check, Wrench, Lightbulb } from "lucide-react";
 import type { BomComponent, BomOperation } from "@/lib/erp/types";
+import { BomComponentSelect } from "@/components/erp/BomComponentSelect";
 
 export const Route = createFileRoute("/_app/bom/new")({
   head: () => ({ meta: [{ title: "New Bill of Materials — Shiv Furniture ERP" }] }),
@@ -12,7 +13,7 @@ export const Route = createFileRoute("/_app/bom/new")({
 
 function NewBomPage() {
   const navigate = useNavigate();
-  const { products, workCenters, upsertBom, createWorkCenter } = useERP();
+  const { products, workCenters, upsertBom, createWorkCenter, boms } = useERP();
 
   // State fields
   const [productId, setProductId] = useState("");
@@ -34,6 +35,36 @@ function NewBomPage() {
   // Validation / Warnings
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+
+  // Template states
+  const [selectedTemplateBomId, setSelectedTemplateBomId] = useState("");
+
+  const selectedProduct = useMemo(() => products.find(p => p.id === productId), [products, productId]);
+
+  const templateBoms = useMemo(() => {
+    if (!selectedProduct) return [];
+    const otherProductsInSameCat = products.filter(
+      p => p.category === selectedProduct.category && p.id !== selectedProduct.id
+    );
+    const otherCatIds = new Set(otherProductsInSameCat.map(p => p.id));
+    return boms.filter(b => b.isActive && otherCatIds.has(b.productId));
+  }, [boms, products, selectedProduct]);
+
+  const handleCopyTemplate = () => {
+    const templateBom = boms.find(b => b.id === selectedTemplateBomId);
+    if (templateBom && templateBom.components) {
+      setComponents(
+        templateBom.components.map(c => ({
+          productId: c.productId,
+          qty: c.qty,
+          unitOfMeasure: c.unitOfMeasure || "pcs",
+          notes: c.notes || `Copied from ${productName(templateBom.productId)}'s BoM`
+        }))
+      );
+      setSuccessMsg("Components successfully copied from template!");
+      setTimeout(() => setSuccessMsg(""), 3000);
+    }
+  };
 
   // Product helpers
   const finishedProducts = useMemo(() => {
@@ -232,9 +263,7 @@ function NewBomPage() {
       setErrorMsg(err.message || "Failed to create Bill of Materials");
     }
   };
-
-  const selectedProduct = products.find(p => p.id === productId);
-
+  
   return (
     <div className="space-y-5">
       <div>
@@ -248,6 +277,13 @@ function NewBomPage() {
         <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3.5 text-sm text-destructive">
           <AlertCircle className="h-4.5 w-4.5 shrink-0" />
           <span>{errorMsg}</span>
+        </div>
+      )}
+
+      {successMsg && (
+        <div className="flex items-center gap-2 rounded-lg border border-success/30 bg-success/10 p-3.5 text-sm text-success font-medium">
+          <Check className="h-4.5 w-4.5 shrink-0 text-success" />
+          <span>{successMsg}</span>
         </div>
       )}
 
@@ -334,8 +370,46 @@ function NewBomPage() {
             </Field>
           </div>
 
-          {/* Components Card */}
-          <div className="rounded-lg border bg-card p-4 shadow-sm space-y-4">
+            {/* Quick Template Copy Banner */}
+            {selectedProduct && templateBoms.length > 0 && (
+              <div className="rounded-lg border border-accent/20 bg-accent/5 p-3.5 flex flex-wrap items-center justify-between gap-3 text-sm">
+                <div className="flex items-center gap-2 text-accent">
+                  <Lightbulb className="h-5 w-5 text-accent shrink-0" />
+                  <div>
+                    <span className="font-semibold text-foreground">Quick Start:</span> Copy components from a similar product in category <span className="font-semibold">"{selectedProduct.category}"</span>.
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={selectedTemplateBomId}
+                    onChange={e => setSelectedTemplateBomId(e.target.value)}
+                    className="h-8 py-0.5 text-xs w-44"
+                  >
+                    <option value="">-- Choose Template BoM --</option>
+                    {templateBoms.map(tb => {
+                      const p = products.find(x => x.id === tb.productId);
+                      return (
+                        <option key={tb.id} value={tb.id}>
+                          {p?.name || tb.productId} (v{tb.version})
+                        </option>
+                      );
+                    })}
+                  </Select>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    disabled={!selectedTemplateBomId}
+                    onClick={handleCopyTemplate}
+                    className="h-8 text-xs font-semibold px-3.5"
+                  >
+                    Copy Components
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Components Card */}
+            <div className="rounded-lg border bg-card p-4 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b pb-2">
               <h2 className="font-serif text-base font-semibold text-foreground">Components & Materials</h2>
               <Button type="button" variant="ghost" onClick={addComponent}>
@@ -367,17 +441,14 @@ function NewBomPage() {
                       return (
                         <tr key={idx} className="border-b last:border-0 align-middle">
                           <td className="py-2.5 pr-2">
-                            <Select
+                            <BomComponentSelect
                               value={c.productId}
-                              onChange={e => updateComponent(idx, { productId: e.target.value })}
-                              className="w-full"
-                            >
-                              {rawMaterials.map(rm => (
-                                <option key={rm.id} value={rm.id}>
-                                  {rm.name} (Free: {getProductFreeQty(rm.id)} {getProductUnit(rm.id)})
-                                </option>
-                              ))}
-                            </Select>
+                              onChange={val => updateComponent(idx, { productId: val })}
+                              products={products}
+                              boms={boms}
+                              finishedProductId={productId}
+                              rawMaterials={rawMaterials}
+                            />
                           </td>
                           <td className="py-2.5 pr-2 text-right">
                             <div className="relative inline-block w-full">

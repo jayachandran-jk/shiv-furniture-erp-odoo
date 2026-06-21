@@ -5,7 +5,7 @@ import { hasPermission } from "@/lib/erp/permissions";
 import { StatusBadge } from "@/components/erp/StatusBadge";
 import { Button, StatusStepper, Field, Input, Select } from "@/components/erp/ui";
 import { format } from "date-fns";
-import { ArrowLeft, Play, Pause, Check, Pencil, X, Save, Package, ShoppingCart } from "lucide-react";
+import { ArrowLeft, Play, Pause, Check, Pencil, X, Save, Package, ShoppingCart, AlertCircle } from "lucide-react";
 import type { WorkOrder } from "@/lib/erp/types";
 import { useWorkOrderContext } from "@/lib/erp/WorkOrderContext";
 
@@ -55,6 +55,11 @@ function MoDetail() {
 
   const [editingComponents, setEditingComponents] = useState(false);
   const [editComponents, setEditComponents] = useState<{ productId: string; requiredQty: number }[]>([]);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  useEffect(() => {
+    setErrorMsg("");
+  }, [id]);
 
   // Consume WorkOrderContext instead of local timers
   const { workOrders, startWorkOrder, completeWorkOrder } = useWorkOrderContext();
@@ -169,6 +174,13 @@ function MoDetail() {
           <StatusBadge status={mo.status} />
         </div>
       </div>
+
+      {errorMsg && (
+        <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3.5 text-sm text-destructive">
+          <AlertCircle className="h-4.5 w-4.5 shrink-0" />
+          <span>{errorMsg}</span>
+        </div>
+      )}
 
       {mo.status !== "Cancelled" && (
         <div className="rounded-lg border bg-card p-4"><StatusStepper steps={STEPS} current={mo.status} /></div>
@@ -496,10 +508,16 @@ function MoDetail() {
             <Button variant="primary" onClick={() => confirmManufacturingOrder(mo.id)}>Confirm and reserve components</Button>
             <Button variant="danger" onClick={() => { if (confirm("Cancel this draft MO?")) cancelManufacturingOrder(mo.id); }}>Cancel</Button>
           </>}
-          {(mo.status === "Confirmed" || mo.status === "In Progress") && (
-            <Button variant="primary" onClick={() => {
-              if (confirm(`Complete ${mo.number}? This will consume components and add ${mo.qty} ${product?.name} to On Hand. This cannot be undone.`))
-                completeManufacturingOrder(mo.id);
+          {(mo.status === "Confirmed" || mo.status === "In Progress" || mo.status === "Waiting for Materials") && (
+            <Button variant="primary" onClick={async () => {
+              if (confirm(`Complete ${mo.number}? This will consume components and add ${mo.qty} ${product?.name} to On Hand. This cannot be undone.`)) {
+                try {
+                  setErrorMsg("");
+                  await completeManufacturingOrder(mo.id);
+                } catch (err: any) {
+                  setErrorMsg(err.message || "Failed to complete manufacturing order");
+                }
+              }
             }}>Mark as done</Button>
           )}
         </div>

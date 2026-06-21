@@ -134,7 +134,8 @@ public class ManufacturingOrderService {
         ManufacturingOrder mo = manufacturingOrderRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Manufacturing order not found: " + id));
 
-        if (!"Draft".equals(mo.getStatus())) {
+        String status = mo.getStatus() != null ? mo.getStatus().trim() : "";
+        if (!"Draft".equalsIgnoreCase(status)) {
             throw new IllegalStateException("Only Draft manufacturing orders can be edited.");
         }
 
@@ -170,7 +171,8 @@ public class ManufacturingOrderService {
         ManufacturingOrder mo = manufacturingOrderRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Manufacturing order not found: " + id));
 
-        if (!"Draft".equals(mo.getStatus())) {
+        String status = mo.getStatus() != null ? mo.getStatus().trim() : "";
+        if (!"Draft".equalsIgnoreCase(status)) {
             throw new IllegalStateException("Only Draft manufacturing orders can be confirmed.");
         }
 
@@ -284,7 +286,8 @@ public class ManufacturingOrderService {
 
         // Manage durations
         if ("Started".equals(oldStatus) && targetWo.getStartedAt() != null) {
-            long minutes = Duration.between(targetWo.getStartedAt(), now).toMinutes();
+            long seconds = Duration.between(targetWo.getStartedAt(), now).getSeconds();
+            long minutes = seconds > 0 ? (seconds + 59) / 60 : 0;
             targetWo.setActualDurationMinutes(targetWo.getActualDurationMinutes() + (int) minutes);
         }
 
@@ -321,7 +324,8 @@ public class ManufacturingOrderService {
         }
 
         // Auto transition MO to In Progress if it is Confirmed or Waiting for Materials and any work order is Started/Paused/Completed
-        if ("Confirmed".equals(mo.getStatus()) || "Waiting for Materials".equals(mo.getStatus())) {
+        String currentMoStatus = mo.getStatus() != null ? mo.getStatus().trim() : "";
+        if ("Confirmed".equalsIgnoreCase(currentMoStatus) || "Waiting for Materials".equalsIgnoreCase(currentMoStatus)) {
             String oldMoStatus = mo.getStatus();
             mo.setStatus("In Progress");
             Product product = productRepository.findById(mo.getProductId()).orElse(null);
@@ -346,8 +350,9 @@ public class ManufacturingOrderService {
         ManufacturingOrder mo = manufacturingOrderRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Manufacturing order not found: " + id));
 
-        if (!"Confirmed".equals(mo.getStatus()) && !"In Progress".equals(mo.getStatus())) {
-            throw new IllegalStateException("Only Confirmed or In Progress orders can be completed.");
+        String status = mo.getStatus() != null ? mo.getStatus().trim() : "";
+        if (!"Confirmed".equalsIgnoreCase(status) && !"In Progress".equalsIgnoreCase(status) && !"Waiting for Materials".equalsIgnoreCase(status)) {
+            throw new IllegalStateException("Only Confirmed, In Progress, or Waiting for Materials orders can be completed. Current status: " + mo.getStatus());
         }
 
         String userId = SecurityUtils.getCurrentUserId();
@@ -397,7 +402,8 @@ public class ManufacturingOrderService {
             for (WorkOrder wo : mo.getWorkOrders()) {
                 if (!"Completed".equals(wo.getStatus()) && !"Done".equals(wo.getStatus())) {
                     if ("Started".equals(wo.getStatus()) && wo.getStartedAt() != null) {
-                        long minutes = Duration.between(wo.getStartedAt(), now).toMinutes();
+                        long seconds = Duration.between(wo.getStartedAt(), now).getSeconds();
+                        long minutes = seconds > 0 ? (seconds + 59) / 60 : 0;
                         wo.setActualDurationMinutes(wo.getActualDurationMinutes() + (int) minutes);
                     }
                     wo.setStatus("Completed");
@@ -520,7 +526,8 @@ public class ManufacturingOrderService {
         ManufacturingOrder mo = manufacturingOrderRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Manufacturing order not found: " + id));
 
-        if ("Done".equals(mo.getStatus()) || "Cancelled".equals(mo.getStatus())) {
+        String status = mo.getStatus() != null ? mo.getStatus().trim() : "";
+        if ("Done".equalsIgnoreCase(status) || "Cancelled".equalsIgnoreCase(status)) {
             throw new IllegalStateException("Completed or Cancelled orders cannot be cancelled.");
         }
 
@@ -528,7 +535,7 @@ public class ManufacturingOrderService {
         String oldStatus = mo.getStatus();
 
         // Release reserved stock for components if Confirmed, In Progress, or Waiting for Materials
-        if ("Confirmed".equals(mo.getStatus()) || "In Progress".equals(mo.getStatus()) || "Waiting for Materials".equals(mo.getStatus())) {
+        if ("Confirmed".equalsIgnoreCase(status) || "In Progress".equalsIgnoreCase(status) || "Waiting for Materials".equalsIgnoreCase(status)) {
             if (mo.getComponents() != null) {
                 for (MoComponent comp : mo.getComponents()) {
                     // Since it was reserved, we release it
