@@ -159,8 +159,7 @@ public class SalesOrderService {
             for (SalesOrderLine line : so.getLines()) {
                 Product product = productCache.get(line.getProductId());
                 int orderedQty = line.getQty();
-                product.setReservedQty(product.getReservedQty() + orderedQty);
-                productRepository.save(product);
+
 
                 stockLedgerService.recordMovement(
                         product.getId(),
@@ -196,8 +195,7 @@ public class SalesOrderService {
 
                 if (freeToUse >= orderedQty) {
                     reserveQty = orderedQty;
-                    product.setReservedQty(product.getReservedQty() + reserveQty);
-                    productRepository.save(product);
+
 
                     stockLedgerService.recordMovement(
                             product.getId(),
@@ -217,8 +215,7 @@ public class SalesOrderService {
                     int shortageQty = orderedQty - reserveQty;
 
                     if (reserveQty > 0) {
-                        product.setReservedQty(product.getReservedQty() + reserveQty);
-                        productRepository.save(product);
+
 
                         stockLedgerService.recordMovement(
                             product.getId(),

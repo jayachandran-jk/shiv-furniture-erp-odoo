@@ -459,8 +459,7 @@ public class ManufacturingOrderService {
                                 
                                 Product product = productRepository.findByIdForUpdate(saved.getProductId()).orElse(null);
                                 if (product != null) {
-                                    product.setReservedQty((product.getReservedQty() != null ? product.getReservedQty() : 0) + qtyToReserve);
-                                    productRepository.save(product);
+
                                     
                                     stockLedgerService.recordMovement(
                                         product.getId(),

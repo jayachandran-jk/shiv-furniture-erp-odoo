@@ -181,6 +181,21 @@ public class ProductController {
             saved = productRepository.save(saved);
         }
 
+        if (saved.getOnHandQty() != null && saved.getOnHandQty() > 0) {
+            StockLedger ledger = StockLedger.builder()
+                    .id("sl-" + UUID.randomUUID().toString().substring(0, 8))
+                    .productId(saved.getId())
+                    .movementType("STOCK_ADJUST")
+                    .quantity(saved.getOnHandQty())
+                    .onHandAfter(saved.getOnHandQty())
+                    .reservedAfter(saved.getReservedQty())
+                    .referenceType("ADJUST")
+                    .referenceId(saved.getId())
+                    .notes("Opening stock on product creation")
+                    .build();
+            stockLedgerRepository.save(ledger);
+        }
+
         auditLogService.logChange(
                 SecurityUtils.getCurrentUserId(),
                 "Product",

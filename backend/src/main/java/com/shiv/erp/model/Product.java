@@ -53,10 +53,12 @@ public class Product {
 
     @Column(name = "on_hand_qty")
     @Builder.Default
+    @com.fasterxml.jackson.annotation.JsonAlias({"onHand", "onHandQty"})
     private Integer onHandQty = 0;
 
     @Column(name = "reserved_qty")
     @Builder.Default
+    @com.fasterxml.jackson.annotation.JsonAlias({"reserved", "reservedQty"})
     private Integer reservedQty = 0;
 
     @Column(name = "is_active", nullable = false)

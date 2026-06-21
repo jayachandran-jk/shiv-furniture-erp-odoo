@@ -327,8 +327,7 @@ public class PurchaseOrderService {
                                         
                                         Product product = productRepository.findByIdForUpdate(solLine.getProductId()).orElse(null);
                                         if (product != null) {
-                                            product.setReservedQty((product.getReservedQty() != null ? product.getReservedQty() : 0) + qtyToReserve);
-                                            productRepository.save(product);
+
                                             
                                             stockLedgerService.recordMovement(
                                                 product.getId(),
