@@ -136,8 +136,8 @@ function Dashboard() {
   const lowPct = totalProducts ? (lowStockCount / totalProducts) * 100 : 0;
   const inPct = totalProducts ? (inStockCount / totalProducts) * 100 : 0;
 
-  const radius = 36;
-  const circ = 2 * Math.PI * radius; // ~226.2
+  const radius = 45;
+  const circ = 2 * Math.PI * radius; // ~282.74
   const inOffset = 0;
   const lowOffset = -((inPct / 100) * circ);
   const oosOffset = -(((inPct + lowPct) / 100) * circ);
@@ -404,8 +404,8 @@ function Dashboard() {
                     className="stroke-emerald-500 transition-all duration-500" 
                     strokeWidth="10" 
                     fill="transparent" 
-                    strokeDasharray={`${(inPct / 100) * (2 * Math.PI * 45)} ${(2 * Math.PI * 45)}`} 
-                    strokeDashoffset={-(inOffset / circ) * (2 * Math.PI * 45)}
+                    strokeDasharray={`${(inPct / 100) * circ} ${circ}`} 
+                    strokeDashoffset={inOffset}
                     strokeLinecap="round"
                     filter="url(#glow-emerald)"
                   />
@@ -418,8 +418,8 @@ function Dashboard() {
                     className="stroke-amber-500 transition-all duration-500" 
                     strokeWidth="10" 
                     fill="transparent" 
-                    strokeDasharray={`${(lowPct / 100) * (2 * Math.PI * 45)} ${(2 * Math.PI * 45)}`} 
-                    strokeDashoffset={-(lowOffset / circ) * (2 * Math.PI * 45)}
+                    strokeDasharray={`${(lowPct / 100) * circ} ${circ}`} 
+                    strokeDashoffset={lowOffset}
                     strokeLinecap="round"
                     filter="url(#glow-amber)"
                   />
@@ -432,8 +432,8 @@ function Dashboard() {
                     className="stroke-red-500 transition-all duration-500" 
                     strokeWidth="10" 
                     fill="transparent" 
-                    strokeDasharray={`${(oosPct / 100) * (2 * Math.PI * 45)} ${(2 * Math.PI * 45)}`} 
-                    strokeDashoffset={-(oosOffset / circ) * (2 * Math.PI * 45)}
+                    strokeDasharray={`${(oosPct / 100) * circ} ${circ}`} 
+                    strokeDashoffset={oosOffset}
                     strokeLinecap="round"
                     filter="url(#glow-red)"
                   />
